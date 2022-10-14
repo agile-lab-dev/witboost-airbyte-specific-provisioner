@@ -7,9 +7,12 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives.complete
 import akka.http.scaladsl.server.directives.{Credentials, SecurityDirectives}
 import buildinfo.BuildInfo
-import it.agilelab.datamesh.airbytespecificprovisioner.api.intepreter.{ProvisionerApiMarshallerImpl, ProvisionerApiServiceImpl}
+import it.agilelab.datamesh.airbytespecificprovisioner.api.intepreter.{
+  ProvisionerApiMarshallerImpl,
+  ProvisionerApiServiceImpl
+}
 import it.agilelab.datamesh.airbytespecificprovisioner.api.{SpecificProvisionerApi, SpecificProvisionerApiService}
-import it.agilelab.datamesh.airbytespecificprovisioner.integrator.DataCatalogManager
+import it.agilelab.datamesh.airbytespecificprovisioner.integrator.AirbyteWorkloadManager
 import it.agilelab.datamesh.airbytespecificprovisioner.server.Controller
 import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration.httpPort
 
@@ -54,5 +57,7 @@ object Main {
     BuildInfo.name.replaceAll("""\.""", "-")
   )
 
-  def main(args: Array[String]): Unit = { val _ = run(httpPort, new ProvisionerApiServiceImpl(new DataCatalogManager())) }
+  def main(args: Array[String]): Unit = {
+    val _ = run(httpPort, new ProvisionerApiServiceImpl(new AirbyteWorkloadManager()))
+  }
 }

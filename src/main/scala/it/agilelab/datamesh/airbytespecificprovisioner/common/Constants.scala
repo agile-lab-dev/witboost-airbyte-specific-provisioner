@@ -4,7 +4,6 @@ object Constants {
 
   val DATA_PRODUCT           = "dataProduct"
   val COMPONENT              = "component"
-  val OUTPUT_PORT            = "outputport"
   val WORKLOAD               = "workload"
   val KIND                   = "kind"
   val DOMAIN                 = "domain"

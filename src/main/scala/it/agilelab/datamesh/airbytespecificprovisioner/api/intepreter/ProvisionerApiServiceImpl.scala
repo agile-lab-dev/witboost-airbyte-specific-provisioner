@@ -5,10 +5,10 @@ import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport.{marshaller, unmarshaller}
 import it.agilelab.datamesh.airbytespecificprovisioner.api.SpecificProvisionerApiService
-import it.agilelab.datamesh.airbytespecificprovisioner.integrator.DataCatalogManager
+import it.agilelab.datamesh.airbytespecificprovisioner.integrator.AirbyteWorkloadManager
 import it.agilelab.datamesh.airbytespecificprovisioner.model._
 
-class ProvisionerApiServiceImpl(dataCatalogManager: DataCatalogManager) extends SpecificProvisionerApiService {
+class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager) extends SpecificProvisionerApiService {
 
   // Json String
   implicit val toEntityMarshallerJsonString: ToEntityMarshaller[String]       = marshaller[String]
@@ -36,7 +36,7 @@ class ProvisionerApiServiceImpl(dataCatalogManager: DataCatalogManager) extends 
       toEntityMarshallerProvisioningStatus: ToEntityMarshaller[ProvisioningStatus],
       toEntityMarshallerValidationError: ToEntityMarshaller[ValidationError]
   ): Route =
-    dataCatalogManager.provision(provisioningRequest.descriptorKind, provisioningRequest.descriptor) match {
+    airbyteWorkloadManager.provision(provisioningRequest.descriptorKind, provisioningRequest.descriptor) match {
       case Left(e @ ValidationError(_)) => provision400(e)
       case Left(e @ SystemError(_))     => provision500(e)
       case Right(res) => provision200(ProvisioningStatus(ProvisioningStatusEnums.StatusEnum.COMPLETED, Some(res)))
