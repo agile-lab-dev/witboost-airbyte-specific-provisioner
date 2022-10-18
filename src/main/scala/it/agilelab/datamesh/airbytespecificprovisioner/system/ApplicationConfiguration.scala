@@ -25,4 +25,17 @@ object ApplicationConfiguration {
 
   def httpPort: Int = config.get.getInt("specific-provisioner.http-port")
 
+  def airbyteInvocationTimeout = config.get.getInt("specific-provisioner.airbyte.invocation-timeout")
+
+  def airbyteBaseUrl: String = config.get.getString("specific-provisioner.airbyte.base-url")
+
+  def airbyteSourceCreationEndpoint: String = config.get
+    .getString("specific-provisioner.airbyte.source-creation-endpoint")
+
+  def airbyteDestinationCreationEndpoint: String = config.get
+    .getString("specific-provisioner.airbyte.destination-creation-endpoint")
+
+  def airbyteConnectionCreationEndpoint: String = config.get
+    .getString("specific-provisioner.airbyte.connection-creation-endpoint")
+
 }

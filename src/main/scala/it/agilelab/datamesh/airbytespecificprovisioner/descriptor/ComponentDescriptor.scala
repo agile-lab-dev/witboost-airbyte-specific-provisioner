@@ -79,6 +79,27 @@ final case class ComponentDescriptor(
   // ==== INFO FROM OUTPUT PORT SPECIFIC ======================================================================
   def getComponentSpecific: Either[ValidationError, Json] = Right(compSpecific)
 
+  def getComponentWorkspaceId: Either[ValidationError, String] = compSpecific.hcursor.downField("workspaceId")
+    .as[String].left.map(_ => ValidationError(Seq("Failed to retrieve component workspaceId")))
+
+  def getComponentSourceKeys: Either[ValidationError, List[String]] = compSpecific.hcursor.downField("sources").keys
+    .toRight(ValidationError(Seq("Failed to retrieve component sources"))).map(_.toList)
+
+  def getSourceByKey(sourceKey: String): Either[ValidationError, Json] = compSpecific.hcursor.downField("sources")
+    .downField(sourceKey).as[Json].left
+    .map(_ => ValidationError(Seq(s"Failed to retrieve component source with source key $sourceKey")))
+
+  def getComponentDestinationKeys: Either[ValidationError, List[String]] = compSpecific.hcursor
+    .downField("destinations").keys.toRight(ValidationError(Seq("Failed to retrieve component destinations")))
+    .map(_.toList)
+
+  def getDestinationByKey(destinationKey: String): Either[ValidationError, Json] = compSpecific.hcursor
+    .downField("destinations").downField(destinationKey).as[Json].left
+    .map(_ => ValidationError(Seq(s"Failed to retrieve component destination with destination key $destinationKey")))
+
+  def getComponentConnections: Either[ValidationError, List[Json]] = compSpecific.hcursor.downField("connections")
+    .as[List[Json]].left.map(_ => ValidationError(Seq(s"Failed to retrieve component connections")))
+
   // ==== VALIDATION UTILITIES ================================================================================
   def validateComponent: Either[Product, ComponentDescriptor] = {
     val validationErrors = List(
@@ -119,36 +140,26 @@ final case class ComponentDescriptor(
 
 object ComponentDescriptor {
 
-  def apply(componentDescriptor: Json): Either[ValidationError, ComponentDescriptor] = {
-    val (dpId, dpHeader, compId, compKind, compHeader, compSpecific) = (
-      getId(componentDescriptor.hcursor),
-      getDataProductHeader(componentDescriptor.hcursor),
-      getComponentId(componentDescriptor.hcursor),
-      getComponentKind(componentDescriptor.hcursor),
-      getComponentHeaderDescriptor(componentDescriptor.hcursor),
-      getComponentSpecificDescriptor(componentDescriptor.hcursor)
+  def apply(dpHeader: Json, component: Json): Either[ValidationError, ComponentDescriptor] = {
+    val (dpId, compId, compKind, compHeader, compSpecific) = (
+      getId(dpHeader.hcursor),
+      getComponentId(component.hcursor),
+      getComponentKind(component.hcursor),
+      getComponentHeaderDescriptor(component.hcursor),
+      getComponentSpecificDescriptor(component.hcursor)
     )
-    (dpId, dpHeader, compId, compKind, compHeader, compSpecific) match {
-      case (
-            Some(dataProductId),
-            Some(dataProductHeader),
-            Some(compId),
-            Some(WORKLOAD),
-            Some(compHeader),
-            Some(compSpecific)
-          ) => Right(ComponentDescriptor(dataProductId, dataProductHeader, compId, WORKLOAD, compHeader, compSpecific))
+    (dpId, compId, compKind, compHeader, compSpecific) match {
+      case (Some(dataProductId), Some(compId), Some(WORKLOAD), Some(compHeader), Some(compSpecific)) =>
+        Right(ComponentDescriptor(dataProductId, dpHeader, compId, WORKLOAD, compHeader, compSpecific))
       case _ => Left(ValidationError(List(s"The workload ${compId.getOrElse("")} descriptor is not valid")))
     }
   }
 
-  def getId(hcursor: HCursor): Option[String] = hcursor.downField(DATA_PRODUCT).downField(ID).as[String].toOption
+  def getId(hcursor: HCursor): Option[String] = hcursor.downField(ID).as[String].toOption
 
-  def getComponentId(hcursor: HCursor): Option[String] = hcursor.downField(COMPONENT).downField(ID).as[String].toOption
+  def getComponentId(hcursor: HCursor): Option[String] = hcursor.downField(ID).as[String].toOption
 
-  def getComponentKind(hcursor: HCursor): Option[String] = hcursor.downField(COMPONENT).downField(KIND).as[String]
-    .toOption
-
-  def getDataProductHeader(hcursor: HCursor): Option[Json] = hcursor.downField(DATA_PRODUCT).as[Json].toOption
+  def getComponentKind(hcursor: HCursor): Option[String] = hcursor.downField(KIND).as[String].toOption
 
   private def getComponentHeaderDescriptor(hcursor: HCursor): Option[Json] = hcursor.keys
     .fold(None: Option[Json]) { keys =>
@@ -158,7 +169,6 @@ object ComponentDescriptor {
       dpHeaderFields.map(Json.fromFields)
     }
 
-  def getComponentSpecificDescriptor(hcursor: HCursor): Option[Json] = hcursor.downField(COMPONENT).downField(SPECIFIC)
-    .as[Json].toOption
+  def getComponentSpecificDescriptor(hcursor: HCursor): Option[Json] = hcursor.downField(SPECIFIC).as[Json].toOption
 
 }

@@ -12,7 +12,7 @@ import it.agilelab.datamesh.airbytespecificprovisioner.api.intepreter.{
   ProvisionerApiServiceImpl
 }
 import it.agilelab.datamesh.airbytespecificprovisioner.api.{SpecificProvisionerApi, SpecificProvisionerApiService}
-import it.agilelab.datamesh.airbytespecificprovisioner.integrator.AirbyteWorkloadManager
+import it.agilelab.datamesh.airbytespecificprovisioner.integrator.{AirbyteClient, AirbyteWorkloadManager}
 import it.agilelab.datamesh.airbytespecificprovisioner.server.Controller
 import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration.httpPort
 
@@ -20,13 +20,13 @@ import scala.jdk.CollectionConverters._
 
 object Main {
 
-  def run(port: Int, impl: SpecificProvisionerApiService): ActorSystem[Nothing] = ActorSystem[Nothing](
+  def run(port: Int, impl: ActorSystem[_] => SpecificProvisionerApiService): ActorSystem[Nothing] = ActorSystem[Nothing](
     Behaviors.setup[Nothing] { context =>
       import akka.actor.typed.scaladsl.adapter._
       implicit val classicSystem: actor.ActorSystem = context.system.toClassic
 
       val api = new SpecificProvisionerApi(
-        impl,
+        impl(context.system),
         new ProvisionerApiMarshallerImpl(),
         SecurityDirectives.authenticateBasic("SecurityRealm", (_: Credentials) => Some(Seq.empty[(String, String)]))
       )
@@ -58,6 +58,14 @@ object Main {
   )
 
   def main(args: Array[String]): Unit = {
-    val _ = run(httpPort, new ProvisionerApiServiceImpl(new AirbyteWorkloadManager()))
+
+    val _ =
+      run(httpPort,
+        createImpl)
+
+  }
+
+  def createImpl(system: ActorSystem[_]): SpecificProvisionerApiService = {
+    new ProvisionerApiServiceImpl(new AirbyteWorkloadManager(new AirbyteClient(system)))
   }
 }
