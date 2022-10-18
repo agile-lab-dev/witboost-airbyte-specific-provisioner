@@ -19,8 +19,8 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
       provisionedDestinations: Map[String, String]
   ): Either[SystemError, Json] = {
     val connectionName = connectionJson.hcursor.downField("name").as[String].getOrElse("")
-    connectionJson.hcursor.downField("sourceId").withFocus(_.mapString(s => provisionedSources(s))).up
-      .downField("destinationId").withFocus(_.mapString(s => provisionedDestinations(s))).top
+    connectionJson.hcursor.downField("sourceId").withFocus(_.mapString(s => provisionedSources.getOrElse(s, ""))).up
+      .downField("destinationId").withFocus(_.mapString(s => provisionedDestinations.getOrElse(s, ""))).top
       .toRight(SystemError(s"Failed to map sourceId or destinationId in connection $connectionName"))
   }
 

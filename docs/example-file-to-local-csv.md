@@ -58,6 +58,5 @@ dataProduct:
             sourceId: source1
             destinationId: destination1
             status: active
-      configuration: {}
 componentIdToProvision: urn:dmb:cmp:finance:cashflow:0:cashflows-calculation
 ```
