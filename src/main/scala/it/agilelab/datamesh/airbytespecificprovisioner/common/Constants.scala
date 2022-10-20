@@ -18,7 +18,6 @@ object Constants {
   val QUALIFIED_NAME         = "qualifiedName"
   val TAGS                   = "tags"
   val TAG_FQN                = "tagFQN"
-  val SOURCE                 = "source"
   val EMAIL                  = "email"
   val VERSION                = "version"
   val DESCRIPTION            = "description"
@@ -27,6 +26,14 @@ object Constants {
   val DATA_CONTRACT          = "dataContract"
   val SCHEMA                 = "schema"
   val PROCESS_DESCRIPTION    = "processDescription"
+
+  val SOURCE      = "source"
+  val DESTINATION = "destination"
+  val CONNECTION  = "connection"
+
+  val CREATE_ACTION = "create"
+  val LIST_ACTION   = "list"
+  val DELETE_ACTION = "delete"
 
   val NOT_ALPHANUMERIC_NOR_UNDERSCORE_NOR_DASH = "[^a-zA-Z0-9_-]"
   val NOT_ALPHANUMERIC_NOR_DASH                = "[^a-zA-Z0-9-]"

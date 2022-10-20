@@ -36,27 +36,23 @@ dataProduct:
       tags: []
       specific:
         workspaceId: 94d9d6ac-4ae9-44f0-af49-8dbb0adfba90
-        sources:
-          source1:
-            name: Public Places Assaults CSV
-            sourceDefinitionId: 778daa7c-feaf-4db6-96f3-70fd645acc77
-            connectionConfiguration:
-              url: https://stats.govt.nz/assets/Uploads/Tools/CSV-files-for-download/analysis-public-place-assaults-sexual-assaults-and-robberies-2015-csv.csv
-              format: csv
-              provider:
-                storage: HTTPS
-                user_agent: false
-              dataset_name: public places assaults
-        destinations:
-          destination1:
-            name: Local CSV folder
-            destinationDefinitionId: 8be1cf83-fde1-477f-a4ad-318d23c9f3c6
-            connectionConfiguration:
-              destination_path: /local/tmp
-        connections:
-          - name: Test Connection
-            sourceId: source1
-            destinationId: destination1
-            status: active
+        source:
+          name: Public Places Assaults CSV
+          sourceDefinitionId: 778daa7c-feaf-4db6-96f3-70fd645acc77
+          connectionConfiguration:
+            url: https://stats.govt.nz/assets/Uploads/Tools/CSV-files-for-download/analysis-public-place-assaults-sexual-assaults-and-robberies-2015-csv.csv
+            format: csv
+            provider:
+              storage: HTTPS
+              user_agent: false
+            dataset_name: public places assaults
+        destination:
+          name: Local CSV folder
+          destinationDefinitionId: 8be1cf83-fde1-477f-a4ad-318d23c9f3c6
+          connectionConfiguration:
+            destination_path: /local/tmp
+        connection:
+          name: Test Connection
+          status: active
 componentIdToProvision: urn:dmb:cmp:finance:cashflow:0:cashflows-calculation
 ```

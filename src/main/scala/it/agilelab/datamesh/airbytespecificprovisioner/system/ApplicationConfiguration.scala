@@ -29,13 +29,13 @@ object ApplicationConfiguration {
 
   def airbyteBaseUrl: String = config.get.getString("specific-provisioner.airbyte.base-url")
 
-  def airbyteSourceCreationEndpoint: String = config.get
-    .getString("specific-provisioner.airbyte.source-creation-endpoint")
+  def airbyteSourcesCreationEndpoint: String = config.get
+    .getString("specific-provisioner.airbyte.sources-creation-endpoint")
 
-  def airbyteDestinationCreationEndpoint: String = config.get
-    .getString("specific-provisioner.airbyte.destination-creation-endpoint")
+  def airbyteDestinationsCreationEndpoint: String = config.get
+    .getString("specific-provisioner.airbyte.destinations-creation-endpoint")
 
-  def airbyteConnectionCreationEndpoint: String = config.get
-    .getString("specific-provisioner.airbyte.connection-creation-endpoint")
+  def airbyteConnectionsCreationEndpoint: String = config.get
+    .getString("specific-provisioner.airbyte.connections-creation-endpoint")
 
 }

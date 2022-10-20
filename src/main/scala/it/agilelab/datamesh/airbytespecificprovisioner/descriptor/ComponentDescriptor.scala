@@ -80,25 +80,16 @@ final case class ComponentDescriptor(
   def getComponentSpecific: Either[ValidationError, Json] = Right(compSpecific)
 
   def getComponentWorkspaceId: Either[ValidationError, String] = compSpecific.hcursor.downField("workspaceId")
-    .as[String].left.map(_ => ValidationError(Seq("Failed to retrieve component workspaceId")))
+    .as[String].left.map(_ => ValidationError(Seq("Failed to retrieve component specific workspaceId")))
 
-  def getComponentSourceKeys: Either[ValidationError, List[String]] = compSpecific.hcursor.downField("sources").keys
-    .toRight(ValidationError(Seq("Failed to retrieve component sources"))).map(_.toList)
+  def getComponentSource: Either[ValidationError, Json] = compSpecific.hcursor.downField("source").as[Json].left
+    .map(_ => ValidationError(Seq("Failed to retrieve component specific source")))
 
-  def getSourceByKey(sourceKey: String): Either[ValidationError, Json] = compSpecific.hcursor.downField("sources")
-    .downField(sourceKey).as[Json].left
-    .map(_ => ValidationError(Seq(s"Failed to retrieve component source with source key $sourceKey")))
+  def getComponentDestination: Either[ValidationError, Json] = compSpecific.hcursor.downField("destination").as[Json]
+    .left.map(_ => ValidationError(Seq("Failed to retrieve component specific destination")))
 
-  def getComponentDestinationKeys: Either[ValidationError, List[String]] = compSpecific.hcursor
-    .downField("destinations").keys.toRight(ValidationError(Seq("Failed to retrieve component destinations")))
-    .map(_.toList)
-
-  def getDestinationByKey(destinationKey: String): Either[ValidationError, Json] = compSpecific.hcursor
-    .downField("destinations").downField(destinationKey).as[Json].left
-    .map(_ => ValidationError(Seq(s"Failed to retrieve component destination with destination key $destinationKey")))
-
-  def getComponentConnections: Either[ValidationError, List[Json]] = compSpecific.hcursor.downField("connections")
-    .as[List[Json]].left.map(_ => ValidationError(Seq(s"Failed to retrieve component connections")))
+  def getComponentConnection: Either[ValidationError, Json] = compSpecific.hcursor.downField("connection").as[Json].left
+    .map(_ => ValidationError(Seq(s"Failed to retrieve component specific connection")))
 
   // ==== VALIDATION UTILITIES ================================================================================
   def validateComponent: Either[Product, ComponentDescriptor] = {

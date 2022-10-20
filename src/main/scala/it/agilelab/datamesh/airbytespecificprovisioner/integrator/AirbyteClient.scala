@@ -7,7 +7,9 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.Materializer
 import com.typesafe.scalalogging.StrictLogging
-import it.agilelab.datamesh.airbytespecificprovisioner.model.SystemError
+import io.circe.{parser, Json, JsonObject}
+import it.agilelab.datamesh.airbytespecificprovisioner.common.Constants.{CREATE_ACTION, DELETE_ACTION, LIST_ACTION}
+import it.agilelab.datamesh.airbytespecificprovisioner.model.{SystemError, ValidationError}
 import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration
 
 import scala.concurrent.duration.DurationInt
@@ -45,57 +47,63 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
     Await.result(unmarshalledFutureResponse, ApplicationConfiguration.airbyteInvocationTimeout seconds)
   }
 
-  def createSource(jsonRequest: String): Either[SystemError, String] = {
+  def createOrRecreate(workspaceId: String, jsonRequest: Json, resourceType: String): Either[Product, String] = for {
+    name <- jsonRequest.hcursor.downField("name").as[String].left.map(_ => ValidationError(Seq("name not found")))
+    listResourcesResponse          <-
+      submitRequest(Json.obj(("workspaceId", Json.fromString(workspaceId))), resourceType, LIST_ACTION)
+    maybeAlreadyExistingResourceId <- getMaybeAlreadyExistingResourceId(listResourcesResponse, resourceType, name)
+    _                              <- maybeAlreadyExistingResourceId match {
+      case Some(alreadyExistingResourceId) => submitRequest(
+          Json.obj((s"${resourceType}Id", Json.fromString(alreadyExistingResourceId))),
+          resourceType,
+          DELETE_ACTION
+        )
+      case None                            => Right("")
+    }
+    createResourceResponse         <- submitRequest(jsonRequest, resourceType, CREATE_ACTION)
+  } yield createResourceResponse
+
+  def submitRequest(jsonRequest: Json, resource: String, action: String): Either[SystemError, String] = {
     val futureResponse = buildFutureHttpResponse(
       HttpMethods.POST,
-      Uri(ApplicationConfiguration.airbyteSourceCreationEndpoint),
-      Some(jsonRequest)
+      Uri(Seq(ApplicationConfiguration.airbyteBaseUrl, s"${resource}s", action).mkString("/")),
+      Some(jsonRequest.toString)
     )
     val httpResponse   = Await.result(futureResponse, ApplicationConfiguration.airbyteInvocationTimeout seconds)
     httpResponseUnmarshaller(httpResponse) match {
       case Success(response) => httpResponse.status.intValue() match {
-          case 200 => Right(response)
-          case 400 => Left(SystemError(s"Airbyte failed to validate request for creating source: $response"))
-          case _ => Left(SystemError(s"Request for creating source failed with error: ${httpResponse.status.toString}"))
+          case 200 | 204 => Right(response)
+          case 400       =>
+            Left(SystemError(s"Airbyte failed to validate request for ${resource}s/$action endpoint: $response"))
+          case _         => Left(SystemError(
+              s"Request to ${resource}s/$action endpoint failed with error: ${httpResponse.status.toString}"
+            ))
         }
       case Failure(e)        => Left(SystemError(e.getMessage))
     }
   }
 
-  def createDestination(jsonRequest: String): Either[SystemError, String] = {
-    val futureResponse = buildFutureHttpResponse(
-      HttpMethods.POST,
-      Uri(ApplicationConfiguration.airbyteDestinationCreationEndpoint),
-      Some(jsonRequest)
-    )
-    val httpResponse   = Await.result(futureResponse, ApplicationConfiguration.airbyteInvocationTimeout seconds)
-    httpResponseUnmarshaller(httpResponse) match {
-      case Success(response) => httpResponse.status.intValue() match {
-          case 200 => Right(response)
-          case 400 => Left(SystemError(s"Airbyte failed to validate request for creating destination: $response"))
-          case _   =>
-            Left(SystemError(s"Request for creating destination failed with error: ${httpResponse.status.toString}"))
-        }
-      case Failure(e)        => Left(SystemError(e.getMessage))
-    }
-  }
-
-  def createConnection(jsonRequest: String): Either[SystemError, String] = {
-    val futureResponse = buildFutureHttpResponse(
-      HttpMethods.POST,
-      Uri(ApplicationConfiguration.airbyteConnectionCreationEndpoint),
-      Some(jsonRequest)
-    )
-    val httpResponse   = Await.result(futureResponse, ApplicationConfiguration.airbyteInvocationTimeout seconds)
-    httpResponseUnmarshaller(httpResponse) match {
-      case Success(response) => httpResponse.status.intValue() match {
-          case 200 => Right(response)
-          case 400 => Left(SystemError(s"Airbyte failed to validate request for creating connection: $response"))
-          case _   =>
-            Left(SystemError(s"Request for creating connection failed with error: ${httpResponse.status.toString}"))
-        }
-      case Failure(e)        => Left(SystemError(e.getMessage))
-    }
+  private def getMaybeAlreadyExistingResourceId(
+      jsonResponse: String,
+      resourceType: String,
+      name: String
+  ): Either[SystemError, Option[String]] = parser.parse(jsonResponse) match {
+    case Right(response) => response.hcursor.downField(s"${resourceType}s").as[List[JsonObject]] match {
+        case Right(l) => l.filter(jo => jo("name").contains(Json.fromString(name))) match {
+            case r :: Nil        =>
+              println("PAPPARAPA" + r(s"${resourceType}Id").flatMap(_.asString))
+              Right(r(s"${resourceType}Id").flatMap(_.asString))
+            case l if l.nonEmpty =>
+              println("WAS HERE")
+              println(jsonResponse)
+              Left(SystemError("Failed to parse response"))
+            case _               => Right(None)
+          }
+        case Left(_)  => Right(None)
+      }
+    case Left(_)         =>
+      println(jsonResponse)
+      Left(SystemError("Failed to parse response"))
   }
 
 }
