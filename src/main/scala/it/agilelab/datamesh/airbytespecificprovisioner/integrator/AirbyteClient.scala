@@ -90,20 +90,13 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
   ): Either[SystemError, Option[String]] = parser.parse(jsonResponse) match {
     case Right(response) => response.hcursor.downField(s"${resourceType}s").as[List[JsonObject]] match {
         case Right(l) => l.filter(jo => jo("name").contains(Json.fromString(name))) match {
-            case r :: Nil        =>
-              println("PAPPARAPA" + r(s"${resourceType}Id").flatMap(_.asString))
-              Right(r(s"${resourceType}Id").flatMap(_.asString))
-            case l if l.nonEmpty =>
-              println("WAS HERE")
-              println(jsonResponse)
-              Left(SystemError("Failed to parse response"))
+            case r :: Nil        => Right(r(s"${resourceType}Id").flatMap(_.asString))
+            case l if l.nonEmpty => Left(SystemError("Failed to parse response"))
             case _               => Right(None)
           }
         case Left(_)  => Right(None)
       }
-    case Left(_)         =>
-      println(jsonResponse)
-      Left(SystemError("Failed to parse response"))
+    case Left(_)         => Left(SystemError("Failed to parse response"))
   }
 
 }
