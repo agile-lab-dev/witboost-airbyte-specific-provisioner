@@ -48,11 +48,16 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
   }
 
   def createOrRecreate(workspaceId: String, jsonRequest: Json, resourceType: String): Either[Product, String] = for {
+    _                      <- delete(workspaceId, jsonRequest, resourceType)
+    createResourceResponse <- submitRequest(jsonRequest, resourceType, CREATE_ACTION)
+  } yield createResourceResponse
+
+  def delete(workspaceId: String, jsonRequest: Json, resourceType: String): Either[Product, String] = for {
     name <- jsonRequest.hcursor.downField("name").as[String].left.map(_ => ValidationError(Seq("name not found")))
     listResourcesResponse          <-
       submitRequest(Json.obj(("workspaceId", Json.fromString(workspaceId))), resourceType, LIST_ACTION)
     maybeAlreadyExistingResourceId <- getMaybeAlreadyExistingResourceId(listResourcesResponse, resourceType, name)
-    _                              <- maybeAlreadyExistingResourceId match {
+    deleteResourceResponse         <- maybeAlreadyExistingResourceId match {
       case Some(alreadyExistingResourceId) => submitRequest(
           Json.obj((s"${resourceType}Id", Json.fromString(alreadyExistingResourceId))),
           resourceType,
@@ -60,8 +65,7 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
         )
       case None                            => Right("")
     }
-    createResourceResponse         <- submitRequest(jsonRequest, resourceType, CREATE_ACTION)
-  } yield createResourceResponse
+  } yield deleteResourceResponse
 
   def submitRequest(jsonRequest: Json, resource: String, action: String): Either[SystemError, String] = {
     val futureResponse = buildFutureHttpResponse(

@@ -59,6 +59,26 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
     provisionedConnections <- provisionConnection(componentDescriptor, provisionedSourceId, provisionedDestinationId)
   } yield provisionedConnections
 
+  private def unprovisionResource(
+      componentDescriptor: ComponentDescriptor,
+      resourceType: String
+  ): Either[Product, String] = for {
+    workspaceId            <- componentDescriptor.getComponentWorkspaceId
+    resource               <- resourceType match {
+      case SOURCE      => componentDescriptor.getComponentSource
+      case DESTINATION => componentDescriptor.getComponentDestination
+      case CONNECTION  => componentDescriptor.getComponentConnection
+    }
+    sourceDeletionResponse <- airbyteClient
+      .delete(workspaceId, resource.deepMerge(Json.obj(("workspaceId", Json.fromString(workspaceId)))), resourceType)
+  } yield sourceDeletionResponse
+
+  private def unprovisionComponent(componentDescriptor: ComponentDescriptor): Either[Product, String] = for {
+    unprovisionedConnectionResponse <- unprovisionResource(componentDescriptor, CONNECTION)
+    _                               <- unprovisionResource(componentDescriptor, DESTINATION)
+    _                               <- unprovisionResource(componentDescriptor, SOURCE)
+  } yield unprovisionedConnectionResponse
+
   private def runTask(
       descriptor: String,
       compApplication: ComponentDescriptor => Either[Product, String]
@@ -68,13 +88,18 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
     responses            <- compApplication(componentDescriptor)
   } yield responses
 
-  def validate(descriptorKind: DescriptorKind, descriptor: String): Either[Product, Boolean] = ???
-
   def provision(descriptorKind: DescriptorKind, descriptor: String): Either[Product, String] = descriptorKind match {
     case COMPONENT_DESCRIPTOR =>
       logger.info("Invoking method {}", "provisionComponent")
       runTask(descriptor, provisionComponent)
     case _ => Left(ValidationError(Seq("Descriptor kind must be COMPONENT_DESCRIPTOR for /provision API")))
+  }
+
+  def unprovision(descriptorKind: DescriptorKind, descriptor: String): Either[Product, String] = descriptorKind match {
+    case COMPONENT_DESCRIPTOR =>
+      logger.info("Invoking method {}", "unprovisionComponent")
+      runTask(descriptor, unprovisionComponent)
+    case _ => Left(ValidationError(Seq("Descriptor kind must be COMPONENT_DESCRIPTOR for /unprovision API")))
   }
 
 }

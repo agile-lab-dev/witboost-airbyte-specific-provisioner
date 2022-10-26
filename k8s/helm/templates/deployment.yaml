@@ -23,28 +23,32 @@ spec:
           configMap:
             name: application.conf
             defaultMode: 420
+        - name: logback-conf
+          configMap:
+            name: logback.xml
+            defaultMode: 420
       containers:
         - name: {{ .Values.name }}
           image: {{ .Values.imageName }}:{{ .Values.version }}
           command: ["bin/datamesh-airbytespecificprovisioner"]
-          args: ["-Dconfig.file=etc/application.conf", "-Dconfig.override_with_env_vars=true"]
+          args: ["-Dconfig.file=etc/app-conf/application.conf", "-Dlogback.configurationFile=etc/log-conf/logback.xml", "-Dconfig.override_with_env_vars=true"]
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-#          Removing readiness and liveliness because there's no such endpoint right now.
-#          To be fixed, totally a bad practice, but this is a mock.
-#          readinessProbe:
-#            httpGet:
-#              path: /ready
-#              port: management
-#            periodSeconds: 10
-#            failureThreshold: 5
-#            initialDelaySeconds: 30
-#          livenessProbe:
-#            httpGet:
-#              path: "/alive"
-#              port: management
-#            periodSeconds: 10
-#            failureThreshold: 5
-#            initialDelaySeconds: 30
+          #          Removing readiness and liveliness because there's no such endpoint right now.
+          #          To be fixed, totally a bad practice, but this is a mock.
+          #          readinessProbe:
+          #            httpGet:
+          #              path: /ready
+          #              port: management
+          #            periodSeconds: 10
+          #            failureThreshold: 5
+          #            initialDelaySeconds: 30
+          #          livenessProbe:
+          #            httpGet:
+          #              path: "/alive"
+          #              port: management
+          #            periodSeconds: 10
+          #            failureThreshold: 5
+          #            initialDelaySeconds: 30
           ports:
             - name: management
               containerPort: 8558
@@ -62,4 +66,6 @@ spec:
                   fieldPath: metadata.namespace
           volumeMounts:
             - name: application-conf
-              mountPath: /opt/docker/etc
+              mountPath: /opt/docker/etc/app-conf
+            - name: logback-conf
+              mountPath: /opt/docker/etc/log-conf

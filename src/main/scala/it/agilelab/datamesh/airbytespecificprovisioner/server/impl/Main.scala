@@ -7,6 +7,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives.complete
 import akka.http.scaladsl.server.directives.{Credentials, SecurityDirectives}
 import buildinfo.BuildInfo
+import com.typesafe.scalalogging.LazyLogging
 import it.agilelab.datamesh.airbytespecificprovisioner.api.intepreter.{
   ProvisionerApiMarshallerImpl,
   ProvisionerApiServiceImpl
@@ -18,54 +19,48 @@ import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfigu
 
 import scala.jdk.CollectionConverters._
 
-object Main {
+object Main extends LazyLogging {
 
-  def run(port: Int, impl: ActorSystem[_] => SpecificProvisionerApiService): ActorSystem[Nothing] = ActorSystem[Nothing](
-    Behaviors.setup[Nothing] { context =>
-      import akka.actor.typed.scaladsl.adapter._
-      implicit val classicSystem: actor.ActorSystem = context.system.toClassic
+  def run(port: Int, impl: ActorSystem[_] => SpecificProvisionerApiService): ActorSystem[Nothing] =
+    ActorSystem[Nothing](
+      Behaviors.setup[Nothing] { context =>
+        import akka.actor.typed.scaladsl.adapter._
+        implicit val classicSystem: actor.ActorSystem = context.system.toClassic
 
-      val api = new SpecificProvisionerApi(
-        impl(context.system),
-        new ProvisionerApiMarshallerImpl(),
-        SecurityDirectives.authenticateBasic("SecurityRealm", (_: Credentials) => Some(Seq.empty[(String, String)]))
-      )
+        val api = new SpecificProvisionerApi(
+          impl(context.system),
+          new ProvisionerApiMarshallerImpl(),
+          SecurityDirectives.authenticateBasic("SecurityRealm", (_: Credentials) => Some(Seq.empty[(String, String)]))
+        )
 
-      val controller = new Controller(
-        api,
-        validationExceptionToRoute = Some { e =>
-          println(e)
-          val results = e.results()
-          if (Option(results).isDefined) {
-            results.crumbs().asScala.foreach(crumb => println(crumb.crumb()))
-            results.items().asScala.foreach { item =>
-              println(item.dataCrumbs())
-              println(item.dataJsonPointer())
-              println(item.schemaCrumbs())
-              println(item.message())
-              println(item.severity())
-            }
-            val message = e.results().items().asScala.map(_.message()).mkString("\n")
-            complete((400, message))
-          } else complete((400, e.getMessage))
-        }
-      )
+        val controller = new Controller(
+          api,
+          validationExceptionToRoute = Some { e =>
+            logger.error("Error: ", e)
+            val results = e.results()
+            if (Option(results).isDefined) {
+              results.crumbs().asScala.foreach(crumb => logger.info(crumb.crumb()))
+              results.items().asScala.foreach { item =>
+                logger.info(item.dataCrumbs())
+                logger.info(item.dataJsonPointer())
+                logger.info(item.schemaCrumbs())
+                logger.info(item.message())
+                logger.info("Severity: ", item.severity.getValue)
+              }
+              val message = e.results().items().asScala.map(_.message()).mkString("\n")
+              complete((400, message))
+            } else complete((400, e.getMessage))
+          }
+        )
 
-      val _ = Http().newServerAt("0.0.0.0", port).bind(controller.routes)
-      Behaviors.empty
-    },
-    BuildInfo.name.replaceAll("""\.""", "-")
-  )
+        val _ = Http().newServerAt("0.0.0.0", port).bind(controller.routes)
+        Behaviors.empty
+      },
+      BuildInfo.name.replaceAll("""\.""", "-")
+    )
 
-  def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit = { val _ = run(httpPort, createImpl) }
 
-    val _ =
-      run(httpPort,
-        createImpl)
-
-  }
-
-  def createImpl(system: ActorSystem[_]): SpecificProvisionerApiService = {
+  def createImpl(system: ActorSystem[_]): SpecificProvisionerApiService =
     new ProvisionerApiServiceImpl(new AirbyteWorkloadManager(new AirbyteClient(system)))
-  }
 }

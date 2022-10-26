@@ -51,7 +51,7 @@ class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager) 
       contexts: Seq[(String, String)],
       toEntityMarshallerSystemError: ToEntityMarshaller[SystemError],
       toEntityMarshallerValidationResult: ToEntityMarshaller[ValidationResult]
-  ): Route = validate200(ValidationResult(true))
+  ): Route = validate200(ValidationResult(valid = true))
 
   /** Code: 200, Message: It synchronously returns the request result, DataType: ProvisioningStatus
    *  Code: 202, Message: If successful returns a provisioning deployment task token that can be used for polling the request status, DataType: String
@@ -63,7 +63,13 @@ class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager) 
       toEntityMarshallerSystemError: ToEntityMarshaller[SystemError],
       toEntityMarshallerProvisioningStatus: ToEntityMarshaller[ProvisioningStatus],
       toEntityMarshallerValidationError: ToEntityMarshaller[ValidationError]
-  ): Route = unprovision202("\"OK\"")
+  ): Route =
+    airbyteWorkloadManager.unprovision(provisioningRequest.descriptorKind, provisioningRequest.descriptor) match {
+      case Left(e @ ValidationError(_)) => unprovision400(e)
+      case Left(e @ SystemError(_))     => unprovision500(e)
+      case Right(res) => unprovision200(ProvisioningStatus(ProvisioningStatusEnums.StatusEnum.COMPLETED, Some(res)))
+      case _          => unprovision500(SystemError("generic error"))
+    }
 
   /** Code: 200, Message: It synchronously returns the access request response, DataType: ProvisioningStatus
    *  Code: 202, Message: It synchronously returns the access request response, DataType: String
