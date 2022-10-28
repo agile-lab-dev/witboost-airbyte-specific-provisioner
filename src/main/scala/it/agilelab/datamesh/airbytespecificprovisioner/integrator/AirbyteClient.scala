@@ -8,7 +8,12 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.Materializer
 import com.typesafe.scalalogging.StrictLogging
 import io.circe.{parser, Json, JsonObject}
-import it.agilelab.datamesh.airbytespecificprovisioner.common.Constants.{CREATE_ACTION, DELETE_ACTION, LIST_ACTION}
+import it.agilelab.datamesh.airbytespecificprovisioner.common.Constants.{
+  CREATE_ACTION,
+  DELETE_ACTION,
+  DISCOVER_ACTION,
+  LIST_ACTION
+}
 import it.agilelab.datamesh.airbytespecificprovisioner.model.{SystemError, ValidationError}
 import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration
 
@@ -47,10 +52,10 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
     Await.result(unmarshalledFutureResponse, ApplicationConfiguration.airbyteInvocationTimeout seconds)
   }
 
-  def createOrRecreate(workspaceId: String, jsonRequest: Json, resourceType: String): Either[Product, String] = for {
-    _                      <- delete(workspaceId, jsonRequest, resourceType)
-    createResourceResponse <- submitRequest(jsonRequest, resourceType, CREATE_ACTION)
-  } yield createResourceResponse
+  def createOrRecreate(workspaceId: String, jsonRequest: Json, resourceType: String): Either[Product, String] = {
+    delete(workspaceId, jsonRequest, resourceType)
+    submitRequest(jsonRequest, resourceType, CREATE_ACTION)
+  }
 
   def delete(workspaceId: String, jsonRequest: Json, resourceType: String): Either[Product, String] = for {
     name <- jsonRequest.hcursor.downField("name").as[String].left.map(_ => ValidationError(Seq("name not found")))
@@ -66,6 +71,12 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
       case None                            => Right("")
     }
   } yield deleteResourceResponse
+
+  def discoverSchema(sourceId: String): Either[SystemError, String] = submitRequest(
+    Json.obj(("sourceId", Json.fromString(sourceId)), ("disable_cache", Json.fromBoolean(false))),
+    "source",
+    DISCOVER_ACTION
+  )
 
   def submitRequest(jsonRequest: Json, resource: String, action: String): Either[SystemError, String] = {
     val futureResponse = buildFutureHttpResponse(

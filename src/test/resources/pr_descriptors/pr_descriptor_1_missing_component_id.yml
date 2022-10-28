@@ -46,7 +46,7 @@ dataProduct:
               user_agent: false
             dataset_name: public places assaults
         destination:
-          name: Local CSV folder
+          name: Snowflake
           destinationDefinitionId: 424892c4-daac-4491-b35d-c6688ba547ba
           connectionConfiguration:
             host: myhost
@@ -61,79 +61,5 @@ dataProduct:
               method: Internal Staging
         connection:
           name: Public Places Assaults CSV <> Snowflake
-          syncCatalog:
-            streams:
-              - stream:
-                  name: public places assaults
-                  jsonSchema:
-                    type: object
-                    properties:
-                      Index:
-                        type:
-                          - number
-                          - 'null'
-                      Urban_area_type:
-                        type:
-                          - string
-                          - 'null'
-                      Region_2013_code:
-                        type:
-                          - number
-                          - 'null'
-                      Region_2013_label:
-                        type:
-                          - string
-                          - 'null'
-                      Area_unit_2013_code:
-                        type:
-                          - number
-                          - 'null'
-                      Area_unit_2013_label:
-                        type:
-                          - string
-                          - 'null'
-                      Urban_area_2013_code:
-                        type:
-                          - number
-                          - 'null'
-                      Urban_area_2013_label:
-                        type:
-                          - string
-                          - 'null'
-                      Population_mid_point_2015:
-                        type:
-                          - number
-                          - 'null'
-                      \" Rate_per_10000_population \":
-                        type:
-                          - string
-                          - 'null'
-                      \" Rate_ratio_NZ_average_rate \":
-                        type:
-                          - string
-                          - 'null'
-                      Victimisations_calendar_year_2015:
-                        type:
-                          - number
-                          - 'null'
-                      Territorial_authority_area_2013_code:
-                        type:
-                          - number
-                          - 'null'
-                      Territorial_authority_area_2013_label:
-                        type:
-                          - string
-                          - 'null'
-                  supportedSyncModes:
-                    - full_refresh
-                  defaultCursorField: []
-                  sourceDefinedPrimaryKey: []
-                config:
-                  syncMode: full_refresh
-                  cursorField: []
-                  destinationSyncMode: overwrite
-                  primaryKey: []
-                  aliasName: public_places_assaults
-                  selected: true
           scheduleType: manual
           status: active

@@ -31,9 +31,10 @@ object Constants {
   val DESTINATION = "destination"
   val CONNECTION  = "connection"
 
-  val CREATE_ACTION = "create"
-  val LIST_ACTION   = "list"
-  val DELETE_ACTION = "delete"
+  val CREATE_ACTION   = "create"
+  val LIST_ACTION     = "list"
+  val DELETE_ACTION   = "delete"
+  val DISCOVER_ACTION = "discover_schema"
 
   val NOT_ALPHANUMERIC_NOR_UNDERSCORE_NOR_DASH = "[^a-zA-Z0-9_-]"
   val NOT_ALPHANUMERIC_NOR_DASH                = "[^a-zA-Z0-9-]"
