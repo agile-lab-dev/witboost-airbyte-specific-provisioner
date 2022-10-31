@@ -31,10 +31,10 @@ kubectl create configmap application.conf --from-file=application.conf="$APPLICA
 kubectl create configmap logback.xml --from-file=logback.xml="logback.xml" -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
 # decrypt secrets
-HELM_SECRETS_DRIVER=vault helm secrets dec values.yaml
+# HELM_SECRETS_DRIVER=vault helm secrets dec values.yaml
 
 # install/upgrade release
-helm upgrade --atomic --install -n ${NAMESPACE} --wait --timeout 120s --description "${COMMIT}" -f values.yaml.dec ${NAME} ./helm \
+helm upgrade --atomic --install -n ${NAMESPACE} --wait --timeout 120s --description "${COMMIT}" -f values.yaml ${NAME} ./helm \
 --set name="${NAME}" \
 --set imageName="${IMAGE_NAME}" \
 --set version="${VERSION}"
@@ -42,7 +42,7 @@ helm upgrade --atomic --install -n ${NAMESPACE} --wait --timeout 120s --descript
 upgrade_result=$?
 
 # rm unencrypted file
-rm values.yaml.dec
+# rm values.yaml.dec
 
 # show deploy history
 helm history ${NAME} -n "${NAMESPACE}"
