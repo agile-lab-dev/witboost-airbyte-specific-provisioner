@@ -25,17 +25,28 @@ object ApplicationConfiguration {
 
   def httpPort: Int = config.get.getInt("specific-provisioner.http-port")
 
-  def airbyteInvocationTimeout = config.get.getInt("specific-provisioner.airbyte.invocation-timeout")
+  case class SnowflakeConfiguration(user: String, password: String, role: String)
 
-  def airbyteBaseUrl: String = config.get.getString("specific-provisioner.airbyte.base-url")
+  def snowflakeConfiguration: SnowflakeConfiguration = SnowflakeConfiguration(
+    user = config.get.getString("snowflake.user"),
+    password = config.get.getString("snowflake.password"),
+    role = config.get.getString("snowflake.role")
+  )
 
-  def airbyteSourcesCreationEndpoint: String = config.get
-    .getString("specific-provisioner.airbyte.sources-creation-endpoint")
+  case class AirbyteConfiguration(
+      invocationTimeout: Int,
+      baseUrl: String,
+      workspaceId: String,
+      sourceId: String,
+      destinationId: String
+  )
 
-  def airbyteDestinationsCreationEndpoint: String = config.get
-    .getString("specific-provisioner.airbyte.destinations-creation-endpoint")
-
-  def airbyteConnectionsCreationEndpoint: String = config.get
-    .getString("specific-provisioner.airbyte.connections-creation-endpoint")
+  def airbyteConfiguration: AirbyteConfiguration = AirbyteConfiguration(
+    invocationTimeout = config.get.getInt("airbyte.invocation-timeout"),
+    baseUrl = config.get.getString("airbyte.base-url"),
+    workspaceId = config.get.getString("airbyte.workspace-id"),
+    sourceId = config.get.getString("airbyte.source-id"),
+    destinationId = config.get.getString("airbyte.destination-id")
+  )
 
 }

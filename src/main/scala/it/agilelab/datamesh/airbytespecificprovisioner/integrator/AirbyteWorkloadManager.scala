@@ -11,8 +11,11 @@ import it.agilelab.datamesh.airbytespecificprovisioner.model.{
   SystemError,
   ValidationError
 }
+import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration
 
 class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging {
+
+  private val workspaceId: String = ApplicationConfiguration.airbyteConfiguration.workspaceId
 
   private def getIdFromCreationResponse(creationResponse: String, field: String): Either[Product, String] = {
     val creationResponseJson = parser.parse(creationResponse).getOrElse(Json.Null)
@@ -21,18 +24,46 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
   }
 
   private def provisionSource(componentDescriptor: ComponentDescriptor): Either[Product, String] = for {
-    workspaceId            <- componentDescriptor.getComponentWorkspaceId
     source                 <- componentDescriptor.getComponentSource
-    sourceCreationResponse <- airbyteClient
-      .createOrRecreate(workspaceId, source.deepMerge(Json.obj(("workspaceId", Json.fromString(workspaceId)))), SOURCE)
+    sourceCreationResponse <- airbyteClient.createOrRecreate(
+      workspaceId,
+      source.deepMerge(Json.obj(
+        ("workspaceId", Json.fromString(workspaceId)),
+        ("sourceDefinitionId", Json.fromString(ApplicationConfiguration.airbyteConfiguration.sourceId))
+      )),
+      SOURCE
+    )
   } yield sourceCreationResponse
 
+  private def getDestinationInfo(componentDestination: Json): Either[Product, Json] = {
+    val password: Json = Json
+      .obj(("password", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.password)))
+
+    val method: Json = Json.obj(("method", Json.fromString("Internal Staging")))
+
+    componentDestination.hcursor.downField("connectionConfiguration").as[Json] match {
+      case Left(_) => Left(SystemError(s"Failed to get connectionConfiguration from destination"))
+      case Right(connectionConfiguration) => Right(componentDestination.deepMerge(Json.obj((
+          "connectionConfiguration",
+          connectionConfiguration.deepMerge(Json.obj(
+            ("role", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.role)),
+            ("username", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.user)),
+            ("credentials", password),
+            ("loading_method", method)
+          ))
+        ))))
+    }
+  }
+
   private def provisionDestination(componentDescriptor: ComponentDescriptor): Either[Product, String] = for {
-    workspaceId                 <- componentDescriptor.getComponentWorkspaceId
     destination                 <- componentDescriptor.getComponentDestination
+    destinationInfo             <- getDestinationInfo(destination)
     destinationCreationResponse <- airbyteClient.createOrRecreate(
       workspaceId,
-      destination.deepMerge(Json.obj(("workspaceId", Json.fromString(workspaceId)))),
+      destinationInfo.deepMerge(Json.obj(
+        ("workspaceId", Json.fromString(workspaceId)),
+        ("destinationDefinitionId", Json.fromString(ApplicationConfiguration.airbyteConfiguration.destinationId))
+      )),
       DESTINATION
     )
   } yield destinationCreationResponse
@@ -43,14 +74,15 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
       provisionedSourceId: String,
       provisionedDestinationId: String
   ): Either[Product, String] = for {
-    workspaceId                 <- componentDescriptor.getComponentWorkspaceId
     componentConnection         <- componentDescriptor.getComponentConnection
     connectionCreationResponses <- airbyteClient.createOrRecreate(
       workspaceId,
       componentConnection.deepMerge(Json.obj(
         ("syncCatalog", connectionInfo),
         ("sourceId", Json.fromString(provisionedSourceId)),
-        ("destinationId", Json.fromString(provisionedDestinationId))
+        ("destinationId", Json.fromString(provisionedDestinationId)),
+        ("scheduleType", Json.fromString("manual")),
+        ("status", Json.fromString("active"))
       )),
       CONNECTION
     )
@@ -94,7 +126,6 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
       componentDescriptor: ComponentDescriptor,
       resourceType: String
   ): Either[Product, String] = for {
-    workspaceId            <- componentDescriptor.getComponentWorkspaceId
     resource               <- resourceType match {
       case SOURCE      => componentDescriptor.getComponentSource
       case DESTINATION => componentDescriptor.getComponentDestination

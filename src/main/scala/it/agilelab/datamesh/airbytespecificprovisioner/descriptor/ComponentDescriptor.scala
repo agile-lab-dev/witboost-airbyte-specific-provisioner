@@ -79,9 +79,6 @@ final case class ComponentDescriptor(
   // ==== INFO FROM OUTPUT PORT SPECIFIC ======================================================================
   def getComponentSpecific: Either[ValidationError, Json] = Right(compSpecific)
 
-  def getComponentWorkspaceId: Either[ValidationError, String] = compSpecific.hcursor.downField("workspaceId")
-    .as[String].left.map(_ => ValidationError(Seq("Failed to retrieve component specific workspaceId")))
-
   def getComponentSource: Either[ValidationError, Json] = compSpecific.hcursor.downField("source").as[Json].left
     .map(_ => ValidationError(Seq("Failed to retrieve component specific source")))
 

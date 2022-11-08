@@ -34,10 +34,8 @@ dataProduct:
       readsFrom: []
       tags: []
       specific:
-        workspaceId: 94d9d6ac-4ae9-44f0-af49-8dbb0adfba90
         source:
           name: Public Places Assaults CSV
-          sourceDefinitionId: 778daa7c-feaf-4db6-96f3-70fd645acc77
           connectionConfiguration:
             url: https://stats.govt.nz/assets/Uploads/Tools/CSV-files-for-download/analysis-public-place-assaults-sexual-assaults-and-robberies-2015-csv.csv
             format: csv
@@ -47,19 +45,10 @@ dataProduct:
             dataset_name: public places assaults
         destination:
           name: Snowflake
-          destinationDefinitionId: 424892c4-daac-4491-b35d-c6688ba547ba
           connectionConfiguration:
             host: myhost
-            role: myrole
             schema: myschema
             database: mydatabase
-            username: myusername
             warehouse: mywarehouse
-            credentials:
-              password: mypassword
-            loading_method:
-              method: Internal Staging
         connection:
           name: Public Places Assaults CSV <> Snowflake
-          scheduleType: manual
-          status: active

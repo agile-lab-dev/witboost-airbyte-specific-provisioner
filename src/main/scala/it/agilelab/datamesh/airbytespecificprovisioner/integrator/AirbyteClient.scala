@@ -49,7 +49,7 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
 
   def httpResponseUnmarshaller(httpResponse: HttpResponse): Try[String] = Try {
     val unmarshalledFutureResponse = Unmarshal(httpResponse.entity).to[String]
-    Await.result(unmarshalledFutureResponse, ApplicationConfiguration.airbyteInvocationTimeout seconds)
+    Await.result(unmarshalledFutureResponse, ApplicationConfiguration.airbyteConfiguration.invocationTimeout seconds)
   }
 
   def createOrRecreate(workspaceId: String, jsonRequest: Json, resourceType: String): Either[Product, String] = {
@@ -81,10 +81,11 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
   def submitRequest(jsonRequest: Json, resource: String, action: String): Either[SystemError, String] = {
     val futureResponse = buildFutureHttpResponse(
       HttpMethods.POST,
-      Uri(Seq(ApplicationConfiguration.airbyteBaseUrl, s"${resource}s", action).mkString("/")),
+      Uri(Seq(ApplicationConfiguration.airbyteConfiguration.baseUrl, s"${resource}s", action).mkString("/")),
       Some(jsonRequest.toString)
     )
-    val httpResponse   = Await.result(futureResponse, ApplicationConfiguration.airbyteInvocationTimeout seconds)
+    val httpResponse   = Await
+      .result(futureResponse, ApplicationConfiguration.airbyteConfiguration.invocationTimeout seconds)
     httpResponseUnmarshaller(httpResponse) match {
       case Success(response) => httpResponse.status.intValue() match {
           case 200 | 204 => Right(response)

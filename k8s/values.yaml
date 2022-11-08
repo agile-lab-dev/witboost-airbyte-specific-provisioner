@@ -3,3 +3,14 @@
 # Declare variables to be passed into your templates.
 
 imagePullPolicy: Always
+
+snowflake:
+  user: !vault k8s/snowflake/snowflake_user#value
+  password: !vault k8s/snowflake/snowflake_password#value
+  role: !vault k8s/snowflake/snowflake_role#value
+
+airbyte:
+  baseUrl: !vault k8s/airbyte/airbyte_base_url#value
+  workspaceId: !vault k8s/airbyte/airbyte_workspace_id#value
+  sourceId: !vault k8s/airbyte/airbyte_source_id#value
+  destinationId: !vault k8s/airbyte/airbyte_destination_id#value
