@@ -27,6 +27,9 @@ final case class ComponentDescriptor(
   def getDataProductDomain: Either[ValidationError, String] = dpHeader.hcursor.downField(DOMAIN).as[String].left
     .map(_ => ValidationError(Seq(s"Mandatory dataproduct parameter $DOMAIN is missing")))
 
+  def getDataProductVersion: Either[ValidationError, String] = dpHeader.hcursor.downField(VERSION).as[String].left
+    .map(_ => ValidationError(Seq(s"Mandatory dataproduct parameter $VERSION is missing")))
+
   def getCollectionName: Either[ValidationError, String] = for {
     domainName <- getDataProductDomain
     dpName     <- getDataProductName
@@ -94,6 +97,7 @@ final case class ComponentDescriptor(
       getDataProductId,
       getDataProductName,
       getDataProductDomain,
+      getDataProductVersion,
       getEnvironment,
       getDataProductOwner,
       getOwnerGroup,

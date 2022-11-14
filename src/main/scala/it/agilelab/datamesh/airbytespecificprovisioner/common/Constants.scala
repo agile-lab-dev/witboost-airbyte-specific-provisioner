@@ -30,6 +30,7 @@ object Constants {
   val SOURCE      = "source"
   val DESTINATION = "destination"
   val CONNECTION  = "connection"
+  val OPERATION   = "operation"
 
   val CREATE_ACTION   = "create"
   val LIST_ACTION     = "list"

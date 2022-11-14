@@ -5,9 +5,11 @@
 imagePullPolicy: Always
 
 snowflake:
+  host: !vault k8s/snowflake/snowflake_host#value
   user: !vault k8s/snowflake/snowflake_user#value
   password: !vault k8s/snowflake/snowflake_password#value
   role: !vault k8s/snowflake/snowflake_role#value
+  warehouse: !vault k8s/snowflake/snowflake_warehouse#value
 
 airbyte:
   baseUrl: !vault k8s/airbyte/airbyte_base_url#value

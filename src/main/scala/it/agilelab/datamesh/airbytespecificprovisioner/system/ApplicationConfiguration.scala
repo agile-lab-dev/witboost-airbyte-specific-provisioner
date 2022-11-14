@@ -25,12 +25,14 @@ object ApplicationConfiguration {
 
   def httpPort: Int = config.get.getInt("specific-provisioner.http-port")
 
-  case class SnowflakeConfiguration(user: String, password: String, role: String)
+  case class SnowflakeConfiguration(host: String, user: String, password: String, role: String, warehouse: String)
 
   def snowflakeConfiguration: SnowflakeConfiguration = SnowflakeConfiguration(
+    host = config.get.getString("snowflake.host"),
     user = config.get.getString("snowflake.user"),
     password = config.get.getString("snowflake.password"),
-    role = config.get.getString("snowflake.role")
+    role = config.get.getString("snowflake.role"),
+    warehouse = config.get.getString("snowflake.warehouse")
   )
 
   case class AirbyteConfiguration(

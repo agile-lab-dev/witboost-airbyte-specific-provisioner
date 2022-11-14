@@ -46,9 +46,7 @@ dataProduct:
         destination:
           name: Snowflake
           connectionConfiguration:
-            host: myhost
             schema: myschema
             database: mydatabase
-            warehouse: mywarehouse
         connection:
           name: Public Places Assaults CSV <> Snowflake

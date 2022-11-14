@@ -3,7 +3,7 @@ package it.agilelab.datamesh.airbytespecificprovisioner.integrator
 import com.typesafe.scalalogging.StrictLogging
 import io.circe.syntax.EncoderOps
 import io.circe.{parser, Json}
-import it.agilelab.datamesh.airbytespecificprovisioner.common.Constants.{CONNECTION, DESTINATION, SOURCE}
+import it.agilelab.datamesh.airbytespecificprovisioner.common.Constants.{CONNECTION, DESTINATION, OPERATION, SOURCE}
 import it.agilelab.datamesh.airbytespecificprovisioner.descriptor.{ComponentDescriptor, ComponentExtractor}
 import it.agilelab.datamesh.airbytespecificprovisioner.model.{
   COMPONENT_DESCRIPTOR,
@@ -35,29 +35,62 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
     )
   } yield sourceCreationResponse
 
-  private def getDestinationInfo(componentDestination: Json): Either[Product, Json] = {
+  private def getConnectionConfiguration(componentDestination: Json): Either[Product, Json] = componentDestination
+    .hcursor.downField("connectionConfiguration").as[Json].left
+    .map(_ => SystemError(s"Failed to get connectionConfiguration from destination"))
+
+  private def getDatabase(
+      componentDescriptor: ComponentDescriptor,
+      connectionConfiguration: Json
+  ): Either[Product, String] = connectionConfiguration.hcursor.downField("database").as[String] match {
+    case Right(value) if value.nonEmpty => Right(value)
+    case _                              => componentDescriptor.getDataProductDomain
+  }
+
+  private def getDatabaseSchema(
+      componentDescriptor: ComponentDescriptor,
+      connectionConfiguration: Json
+  ): Either[Product, String] = for {
+    dpName    <- componentDescriptor.getDataProductName
+    dpVersion <- componentDescriptor.getDataProductVersion
+    schema    <- connectionConfiguration.hcursor.downField("schema").as[String] match {
+      case Right(value) if value.nonEmpty => Right(value)
+      case _                              => Right(s"${dpName.toUpperCase}_${dpVersion.replaceAll("\\.", "")}")
+    }
+  } yield schema
+
+  private def getDestinationInfo(
+      componentDestination: Json,
+      connectionConfiguration: Json,
+      database: String,
+      schema: String
+  ): Either[Product, Json] = {
     val password: Json = Json
       .obj(("password", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.password)))
 
     val method: Json = Json.obj(("method", Json.fromString("Internal Staging")))
 
-    componentDestination.hcursor.downField("connectionConfiguration").as[Json] match {
-      case Left(_) => Left(SystemError(s"Failed to get connectionConfiguration from destination"))
-      case Right(connectionConfiguration) => Right(componentDestination.deepMerge(Json.obj((
-          "connectionConfiguration",
-          connectionConfiguration.deepMerge(Json.obj(
-            ("role", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.role)),
-            ("username", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.user)),
-            ("credentials", password),
-            ("loading_method", method)
-          ))
-        ))))
-    }
+    Right(componentDestination.deepMerge(Json.obj((
+      "connectionConfiguration",
+      connectionConfiguration.deepMerge(Json.obj(
+        ("host", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.host)),
+        ("role", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.role)),
+        ("username", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.user)),
+        ("warehouse", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.warehouse)),
+        ("database", Json.fromString(database.toUpperCase())),
+        ("schema", Json.fromString(schema)),
+        ("credentials", password),
+        ("loading_method", method)
+      ))
+    ))))
   }
 
   private def provisionDestination(componentDescriptor: ComponentDescriptor): Either[Product, String] = for {
     destination                 <- componentDescriptor.getComponentDestination
-    destinationInfo             <- getDestinationInfo(destination)
+    connectionConfiguration     <- getConnectionConfiguration(destination)
+    db                          <- getDatabase(componentDescriptor, connectionConfiguration)
+    dbSchema                    <- getDatabaseSchema(componentDescriptor, connectionConfiguration)
+    destinationInfo             <- getDestinationInfo(destination, connectionConfiguration, db, dbSchema)
     destinationCreationResponse <- airbyteClient.createOrRecreate(
       workspaceId,
       destinationInfo.deepMerge(Json.obj(
@@ -68,11 +101,30 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
     )
   } yield destinationCreationResponse
 
+  private def provisionOperation(): Either[Product, String] = for {
+    operationCreationResponse <- airbyteClient.createOrRecreate(
+      workspaceId,
+      Json.obj(
+        ("workspaceId", Json.fromString(workspaceId)),
+        ("name", Json.fromString("Basic normalization")),
+        (
+          "operatorConfiguration",
+          Json.obj(
+            ("operatorType", Json.fromString("normalization")),
+            ("normalization", Json.obj(("option", Json.fromString("basic"))))
+          )
+        )
+      ),
+      OPERATION
+    )
+  } yield operationCreationResponse
+
   private def provisionConnection(
       componentDescriptor: ComponentDescriptor,
       connectionInfo: Json,
       provisionedSourceId: String,
-      provisionedDestinationId: String
+      provisionedDestinationId: String,
+      provisionedOperationId: String
   ): Either[Product, String] = for {
     componentConnection         <- componentDescriptor.getComponentConnection
     connectionCreationResponses <- airbyteClient.createOrRecreate(
@@ -81,6 +133,7 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
         ("syncCatalog", connectionInfo),
         ("sourceId", Json.fromString(provisionedSourceId)),
         ("destinationId", Json.fromString(provisionedDestinationId)),
+        ("operationIds", List(provisionedOperationId).asJson),
         ("scheduleType", Json.fromString("manual")),
         ("status", Json.fromString("active"))
       )),
@@ -114,12 +167,19 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
   private def provisionComponent(componentDescriptor: ComponentDescriptor): Either[Product, String] = for {
     provisionedSourceResponse      <- provisionSource(componentDescriptor)
     provisionedDestinationResponse <- provisionDestination(componentDescriptor)
+    provisionedOperation           <- provisionOperation()
     provisionedSourceId            <- getIdFromCreationResponse(provisionedSourceResponse, "sourceId")
     provisionedDestinationId       <- getIdFromCreationResponse(provisionedDestinationResponse, "destinationId")
+    provisionedOperationId         <- getIdFromCreationResponse(provisionedOperation, "operationId")
     discoveredSchemaResponse       <- airbyteClient.discoverSchema(provisionedSourceId)
     connectionInfo                 <- getConnectionInfo(discoveredSchemaResponse)
-    provisionedConnections         <-
-      provisionConnection(componentDescriptor, connectionInfo, provisionedSourceId, provisionedDestinationId)
+    provisionedConnections         <- provisionConnection(
+      componentDescriptor,
+      connectionInfo,
+      provisionedSourceId,
+      provisionedDestinationId,
+      provisionedOperationId
+    )
   } yield provisionedConnections
 
   private def unprovisionResource(

@@ -46,10 +46,8 @@ dataProduct:
         destination:
           name: Snowflake
           connectionConfiguration:
-            host: myhost
             schema: myschema
             database: mydatabase
-            warehouse: mywarehouse
         connection:
           name: Public Places Assaults CSV <> Snowflake
 componentIdToProvision: urn:dmb:cmp:finance:cashflow:0:cashflows-calculation
