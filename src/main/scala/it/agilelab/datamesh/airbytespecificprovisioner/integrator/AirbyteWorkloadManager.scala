@@ -55,7 +55,7 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
     dpVersion <- componentDescriptor.getDataProductVersion
     schema    <- connectionConfiguration.hcursor.downField("schema").as[String] match {
       case Right(value) if value.nonEmpty => Right(value)
-      case _ => Right(s"${dpName.toUpperCase.replaceAll(" ", "")}_${dpVersion.split(".")(0)}")
+      case _ => Right(s"${dpName.toUpperCase.replaceAll(" ", "")}_${dpVersion.split('.')(0)}")
     }
   } yield schema
 
