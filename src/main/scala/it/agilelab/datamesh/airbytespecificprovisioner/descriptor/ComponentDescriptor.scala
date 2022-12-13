@@ -91,6 +91,22 @@ final case class ComponentDescriptor(
   def getComponentConnection: Either[ValidationError, Json] = compSpecific.hcursor.downField("connection").as[Json].left
     .map(_ => ValidationError(Seq(s"Failed to retrieve component specific connection")))
 
+  def getConnectionName: Either[ValidationError, String] = getComponentConnection match {
+    case Right(connection) => connection.hcursor.downField("name").as[String] match {
+        case Right(connectionName) => Right(connectionName)
+        case _                     => Left(ValidationError(Seq("Failed to retrieve connection name")))
+      }
+    case Left(error)       => Left(error)
+  }
+
+  def getDbtGitUrl: String = getComponentConnection match {
+    case Right(connection) => connection.hcursor.downField("dbtGitUrl").as[String] match {
+        case Right(url) => url
+        case _          => ""
+      }
+    case _                 => ""
+  }
+
   // ==== VALIDATION UTILITIES ================================================================================
   def validateComponent: Either[Product, ComponentDescriptor] = {
     val validationErrors = List(

@@ -64,4 +64,54 @@ class DescriptorParserSpec extends AnyFlatSpec {
     dp.left.value.errors.head shouldBe "Input data product descriptor cannot be parsed"
   }
 
+  "Parsing a well formed descriptor with dbt transformation" should "return the correct dbtGitUrl" in {
+    val descriptor = getTestResourceAsString("pr_descriptors/pr_descriptor_2_dbt.yml")
+
+    val dpHeaderAndComponent = ComponentExtractor.extract(descriptor).toOption.get
+
+    val component = ComponentDescriptor(dpHeaderAndComponent._1, dpHeaderAndComponent._2).toOption.get
+
+    component.getDbtGitUrl shouldBe
+      "https://gitlab.com/AgileFactory/Witboost.Mesh/Mesh.Repository/Sandbox/dbttesttwo.git"
+  }
+
+  "Parsing a well formed descriptor without dbt transformation" should "return an empty dbtGitUrl" in {
+    val descriptor = getTestResourceAsString("pr_descriptors/pr_descriptor_1.yml")
+
+    val dpHeaderAndComponent = ComponentExtractor.extract(descriptor).toOption.get
+
+    val component = ComponentDescriptor(dpHeaderAndComponent._1, dpHeaderAndComponent._2).toOption.get
+
+    component.getDbtGitUrl shouldBe ""
+  }
+
+  "Parsing a well formed descriptor with an empty dbt transformation field" should "return an empty dbtGitUrl" in {
+    val descriptor = getTestResourceAsString("pr_descriptors/pr_descriptor_2_empty_dbt.yml")
+
+    val dpHeaderAndComponent = ComponentExtractor.extract(descriptor).toOption.get
+
+    val component = ComponentDescriptor(dpHeaderAndComponent._1, dpHeaderAndComponent._2).toOption.get
+
+    component.getDbtGitUrl shouldBe ""
+  }
+
+  "Parsing a well formed descriptor" should "return the correct connection name" in {
+    val descriptor = getTestResourceAsString("pr_descriptors/pr_descriptor_1.yml")
+
+    val dpHeaderAndComponent = ComponentExtractor.extract(descriptor).toOption.get
+
+    val component = ComponentDescriptor(dpHeaderAndComponent._1, dpHeaderAndComponent._2).toOption.get
+
+    component.getConnectionName.toOption.get shouldBe "Public Places Assaults CSV <> Snowflake"
+  }
+
+  "Parsing a wrongly formed descriptor with missing connection name" should "return a Left with an Error" in {
+    val descriptor = getTestResourceAsString("pr_descriptors/pr_descriptor_1_missing_connection_name.yml")
+
+    val dpHeaderAndComponent = ComponentExtractor.extract(descriptor).toOption.get
+
+    val component = ComponentDescriptor(dpHeaderAndComponent._1, dpHeaderAndComponent._2).toOption.get
+
+    component.getConnectionName.left.value.errors.head shouldBe "Failed to retrieve connection name"
+  }
 }
