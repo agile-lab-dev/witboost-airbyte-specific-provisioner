@@ -25,15 +25,27 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
 
   private def provisionSource(componentDescriptor: ComponentDescriptor): Either[Product, String] = for {
     source                 <- componentDescriptor.getComponentSource
-    sourceCreationResponse <- airbyteClient.createOrRecreate(
-      workspaceId,
-      source.deepMerge(Json.obj(
-        ("workspaceId", Json.fromString(workspaceId)),
-        ("sourceDefinitionId", Json.fromString(ApplicationConfiguration.airbyteConfiguration.sourceId))
-      )),
-      SOURCE
-    )
+    sourceInfo             <- getSourceInfo(source)
+    sourceCreationResponse <- airbyteClient.createOrRecreate(workspaceId, sourceInfo, SOURCE)
   } yield sourceCreationResponse
+
+  private def getSourceInfo(source: Json): Either[Product, Json] =
+    source.hcursor.downField("connectionConfiguration").as[Json] match {
+      case Right(connectionConfig) => Right(source.deepMerge(Json.obj(
+          ("workspaceId", Json.fromString(workspaceId)),
+          ("sourceDefinitionId", Json.fromString(ApplicationConfiguration.airbyteConfiguration.sourceId)),
+          (
+            "connectionConfiguration",
+            connectionConfig.deepMerge(Json.obj((
+              "reader_options",
+              Json.fromString(
+                "{\"keep_default_na\": false, \"na_values\": [\"-1.#IND\", \"1.#QNAN\", \"1.#IND\", \"-1.#QNAN\", \"#N/A N/A\", \"#N/A\", \"N/A\", \"n/a\", \"\", \"#NA\", \"NULL\", \"null\", \"NaN\", \"-NaN\", \"nan\", \"-nan\"]}"
+              )
+            )))
+          )
+        )))
+      case _                       => Left(SystemError("Unable to process source connection config"))
+    }
 
   private def getConnectionConfiguration(componentDestination: Json): Either[Product, Json] = componentDestination
     .hcursor.downField("connectionConfiguration").as[Json].left

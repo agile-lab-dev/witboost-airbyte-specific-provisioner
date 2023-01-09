@@ -38,4 +38,4 @@ run
 ```
 
 ### API UI from browser
-- When the app is running use the following link to access the API [swagger](http://127.0.0.1:8093/datamesh.specificprovisioner/0.0/swagger/docs/index.html)
+- When the app is running use the following link to access the API [swagger](http://127.0.0.1:8093/datamesh.airbytespecificprovisioner/0.0/swagger/docs/index.html)
