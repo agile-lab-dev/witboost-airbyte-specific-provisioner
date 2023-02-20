@@ -16,3 +16,5 @@ airbyte:
   workspaceId: !vault k8s/airbyte/airbyte_workspace_id#value
   sourceId: !vault k8s/airbyte/airbyte_source_id#value
   destinationId: !vault k8s/airbyte/airbyte_destination_id#value
+  gitToken: !vault k8s/airbyte/airbyte_git_token#value
+  user: !vault k8s/airbyte/airbyte_user#value

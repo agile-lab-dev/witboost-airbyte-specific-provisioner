@@ -40,7 +40,9 @@ object ApplicationConfiguration {
       baseUrl: String,
       workspaceId: String,
       sourceId: String,
-      destinationId: String
+      destinationId: String,
+      accessToken: String,
+      userName: String
   )
 
   def airbyteConfiguration: AirbyteConfiguration = AirbyteConfiguration(
@@ -48,7 +50,9 @@ object ApplicationConfiguration {
     baseUrl = config.get.getString("airbyte.base-url"),
     workspaceId = config.get.getString("airbyte.workspace-id"),
     sourceId = config.get.getString("airbyte.source-id"),
-    destinationId = config.get.getString("airbyte.destination-id")
+    destinationId = config.get.getString("airbyte.destination-id"),
+    accessToken = config.get.getString("airbyte.access-token"),
+    userName = config.get.getString("airbyte.user-name")
   )
 
 }

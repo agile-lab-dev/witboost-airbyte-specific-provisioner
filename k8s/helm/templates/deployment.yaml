@@ -81,6 +81,10 @@ spec:
               value: {{ .Values.airbyte.sourceId }}
             - name: AIRBYTE_DESTINATION_ID
               value: {{ .Values.airbyte.destinationId }}
+            - name: AIRBYTE_GIT_TOKEN
+              value: {{ .Values.airbyte.gitToken }}
+            - name: AIRBYTE_USER
+              value: {{ .Values.airbyte.user }}
           volumeMounts:
             - name: application-conf
               mountPath: /opt/docker/etc/app-conf

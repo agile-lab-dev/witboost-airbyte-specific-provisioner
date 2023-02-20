@@ -6,8 +6,11 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.EitherValues._
 import org.scalatest.matchers.should.Matchers._
 import it.agilelab.datamesh.airbytespecificprovisioner.common.test.getTestResourceAsString
+import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration
 
 class DescriptorParserSpec extends AnyFlatSpec {
+  private val accessToken: String = ApplicationConfiguration.airbyteConfiguration.accessToken
+  private val userName: String    = ApplicationConfiguration.airbyteConfiguration.userName
 
   "Parsing a well formed descriptor" should "return a correct ComponentDescriptor" in {
     val descriptor = getTestResourceAsString("pr_descriptors/pr_descriptor_1.yml")
@@ -72,7 +75,7 @@ class DescriptorParserSpec extends AnyFlatSpec {
     val component = ComponentDescriptor(dpHeaderAndComponent._1, dpHeaderAndComponent._2).toOption.get
 
     component.getDbtGitUrl shouldBe
-      "https://gitlab.com/AgileFactory/Witboost.Mesh/Mesh.Repository/Sandbox/dbttesttwo.git"
+      f"https://$userName%s:$accessToken%s@gitlab.com/AgileFactory/Witboost.Mesh/Mesh.Repository/Sandbox/dbttesttwo.git"
   }
 
   "Parsing a well formed descriptor without dbt transformation" should "return an empty dbtGitUrl" in {
