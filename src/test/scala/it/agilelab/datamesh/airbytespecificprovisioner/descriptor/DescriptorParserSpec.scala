@@ -9,8 +9,8 @@ import it.agilelab.datamesh.airbytespecificprovisioner.common.test.getTestResour
 import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration
 
 class DescriptorParserSpec extends AnyFlatSpec {
-  private val accessToken: String = ApplicationConfiguration.airbyteConfiguration.accessToken
-  private val userName: String    = ApplicationConfiguration.airbyteConfiguration.userName
+  private val accessToken: String = ApplicationConfiguration.airbyteConfiguration.dbtGitToken
+  private val userName: String    = ApplicationConfiguration.airbyteConfiguration.dbtGitUser
 
   "Parsing a well formed descriptor" should "return a correct ComponentDescriptor" in {
     val descriptor = getTestResourceAsString("pr_descriptors/pr_descriptor_1.yml")

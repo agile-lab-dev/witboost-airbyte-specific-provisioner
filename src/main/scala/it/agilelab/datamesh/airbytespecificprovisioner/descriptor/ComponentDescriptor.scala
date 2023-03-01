@@ -17,8 +17,8 @@ final case class ComponentDescriptor(
     compSpecific: Json
 ) extends StrictLogging {
 
-  private val accessToken: String = ApplicationConfiguration.airbyteConfiguration.accessToken
-  private val userName: String    = ApplicationConfiguration.airbyteConfiguration.userName
+  private val accessToken: String = ApplicationConfiguration.airbyteConfiguration.dbtGitToken
+  private val userName: String    = ApplicationConfiguration.airbyteConfiguration.dbtGitUser
 
   // ==== INFO FROM DATA PRODUCT HEADER =====================================================================
 

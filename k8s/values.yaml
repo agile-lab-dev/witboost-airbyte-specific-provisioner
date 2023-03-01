@@ -16,5 +16,7 @@ airbyte:
   workspaceId: !vault k8s/airbyte/airbyte_workspace_id#value
   sourceId: !vault k8s/airbyte/airbyte_source_id#value
   destinationId: !vault k8s/airbyte/airbyte_destination_id#value
-  gitToken: !vault k8s/airbyte/airbyte_git_token#value
-  user: !vault k8s/airbyte/airbyte_user#value
+  dbtGitToken: !vault k8s/airbyte/dbt_git_token#value
+  dbtGitUser: !vault k8s/airbyte/dbt_git_user#value
+  userName: !vault k8s/airbyte/airbyte_username#value
+  password: !vault k8s/airbyte/airbyte_password#value

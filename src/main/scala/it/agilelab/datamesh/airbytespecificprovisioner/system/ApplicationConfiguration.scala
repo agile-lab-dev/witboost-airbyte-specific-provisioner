@@ -41,8 +41,8 @@ object ApplicationConfiguration {
       workspaceId: String,
       sourceId: String,
       destinationId: String,
-      accessToken: String,
-      userName: String
+      dbtGitToken: String,
+      dbtGitUser: String
   )
 
   def airbyteConfiguration: AirbyteConfiguration = AirbyteConfiguration(
@@ -51,8 +51,8 @@ object ApplicationConfiguration {
     workspaceId = config.get.getString("airbyte.workspace-id"),
     sourceId = config.get.getString("airbyte.source-id"),
     destinationId = config.get.getString("airbyte.destination-id"),
-    accessToken = config.get.getString("airbyte.access-token"),
-    userName = config.get.getString("airbyte.user-name")
+    dbtGitToken = config.get.getString("airbyte.git-token"),
+    dbtGitUser = config.get.getString("airbyte.dbt-user")
   )
 
 }
