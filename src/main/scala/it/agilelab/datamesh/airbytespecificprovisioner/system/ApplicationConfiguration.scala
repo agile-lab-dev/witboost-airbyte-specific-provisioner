@@ -42,7 +42,10 @@ object ApplicationConfiguration {
       sourceId: String,
       destinationId: String,
       dbtGitToken: String,
-      dbtGitUser: String
+      dbtGitUser: String,
+      airbyteUser: String,
+      airbytePassword: String,
+      basicAuth: String
   )
 
   def airbyteConfiguration: AirbyteConfiguration = AirbyteConfiguration(
@@ -52,7 +55,10 @@ object ApplicationConfiguration {
     sourceId = config.get.getString("airbyte.source-id"),
     destinationId = config.get.getString("airbyte.destination-id"),
     dbtGitToken = config.get.getString("airbyte.git-token"),
-    dbtGitUser = config.get.getString("airbyte.dbt-user")
+    dbtGitUser = config.get.getString("airbyte.dbt-user"),
+    airbyteUser = config.get.getString("airbyte.airbyte-user"),
+    airbytePassword = config.get.getString("airbyte.airbyte-password"),
+    basicAuth = config.get.getString("airbyte.basic-auth")
   )
 
 }

@@ -89,6 +89,8 @@ spec:
               value: {{ .Values.airbyte.airbyteUser }}
             - name: AIRBYTE_PASSWORD
               value: {{ .Values.airbyte.airbytePassword }}
+            - name: AIRBYTE_BASIC_AUTH_ENABLED
+              value: {{ .Values.airbyte.basicAuthEnabled }}
           volumeMounts:
             - name: application-conf
               mountPath: /opt/docker/etc/app-conf

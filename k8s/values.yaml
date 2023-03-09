@@ -20,3 +20,4 @@ airbyte:
   dbtGitUser: !vault k8s/airbyte/dbt_git_user#value
   userName: !vault k8s/airbyte/airbyte_username#value
   password: !vault k8s/airbyte/airbyte_password#value
+  basicAuthEnabled: !vault k8s/airbyte/airbyte_basic_auth_enabled#value

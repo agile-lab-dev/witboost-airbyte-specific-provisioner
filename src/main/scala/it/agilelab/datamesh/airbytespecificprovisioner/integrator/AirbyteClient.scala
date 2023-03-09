@@ -4,6 +4,7 @@ import akka.actor
 import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.Materializer
 import com.typesafe.scalalogging.StrictLogging
@@ -31,7 +32,10 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
   private def buildFutureHttpResponse(
       httpMethod: HttpMethod,
       uri: Uri,
-      maybeStringRequest: Option[String]
+      maybeStringRequest: Option[String],
+      username: String,
+      password: String,
+      authEnabled: Boolean
   ): Future[HttpResponse] = {
     logger.info(
       "Calling method {} on api {} with body: [{}]",
@@ -39,7 +43,10 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
       uri.toString,
       maybeStringRequest.getOrElse("")
     )
-    val httpRequest = HttpRequest(method = httpMethod, uri = uri)
+    val httpRequest =
+      if (authEnabled) {
+        HttpRequest(method = httpMethod, uri = uri).withHeaders(Authorization(BasicHttpCredentials(username, password)))
+      } else { HttpRequest(method = httpMethod, uri = uri) }
     maybeStringRequest match {
       case Some(stringRequest) => Http(system)
           .singleRequest(httpRequest.withEntity(HttpEntity(ContentTypes.`application/json`, stringRequest)))
@@ -82,7 +89,10 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
     val futureResponse = buildFutureHttpResponse(
       HttpMethods.POST,
       Uri(Seq(ApplicationConfiguration.airbyteConfiguration.baseUrl, s"${resource}s", action).mkString("/")),
-      Some(jsonRequest.toString)
+      Some(jsonRequest.toString),
+      ApplicationConfiguration.airbyteConfiguration.airbyteUser,
+      ApplicationConfiguration.airbyteConfiguration.airbytePassword,
+      ApplicationConfiguration.airbyteConfiguration.basicAuth.replace("'", "").toBooleanOption.getOrElse(false)
     )
     val httpResponse   = Await
       .result(futureResponse, ApplicationConfiguration.airbyteConfiguration.invocationTimeout seconds)
