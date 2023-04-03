@@ -131,38 +131,6 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
     )
   } yield operationCreationResponse
 
-  private def provisionDbtOperation(componentDescriptor: ComponentDescriptor): Either[Product, String] =
-    componentDescriptor.getDbtGitUrl match {
-      case gitRepoUrl if gitRepoUrl.nonEmpty =>
-        airbyteClient.createOrRecreate(
-          workspaceId,
-          Json.obj(
-            ("workspaceId", Json.fromString(workspaceId)),
-            ("name", Json.fromString("Dbt transformation")),
-            (
-              "operatorConfiguration",
-              Json.obj(
-                ("operatorType", Json.fromString("dbt")),
-                (
-                  "dbt",
-                  Json.obj(
-                    ("gitRepoUrl", Json.fromString(gitRepoUrl)),
-                    ("gitRepoBranch", Json.fromString("")),
-                    ("dockerImage", Json.fromString("fishtownanalytics/dbt:1.0.0")),
-                    ("dbtArguments", Json.fromString("run"))
-                  )
-                )
-              )
-            )
-          ),
-          OPERATION
-        )
-
-      case _ =>
-        logger.info("Skipping Dbt Airbyte operation creation")
-        Right("")
-    }
-
   private def provisionConnection(
       componentDescriptor: ComponentDescriptor,
       connectionInfo: Json,
@@ -213,32 +181,18 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
     provisionedSourceResponse      <- provisionSource(componentDescriptor)
     provisionedDestinationResponse <- provisionDestination(componentDescriptor)
     provisionedOperation           <- provisionOperation()
-    provisionedDbtOperation        <- provisionDbtOperation(componentDescriptor)
     provisionedSourceId            <- getIdFromCreationResponse(provisionedSourceResponse, "sourceId")
     provisionedDestinationId       <- getIdFromCreationResponse(provisionedDestinationResponse, "destinationId")
     provisionedOperationId         <- getIdFromCreationResponse(provisionedOperation, "operationId")
     discoveredSchemaResponse       <- airbyteClient.discoverSchema(provisionedSourceId)
     connectionInfo                 <- getConnectionInfo(discoveredSchemaResponse)
-    provisionedConnection          <- provisionedDbtOperation match {
-      case dbtOperation if dbtOperation.nonEmpty =>
-        getIdFromCreationResponse(provisionedDbtOperation, "operationId") match {
-          case Left(value)                      => Left(value)
-          case Right(provisionedDbtOperationId) => provisionConnection(
-              componentDescriptor,
-              connectionInfo,
-              provisionedSourceId,
-              provisionedDestinationId,
-              List(provisionedOperationId, provisionedDbtOperationId)
-            )
-        }
-      case _                                     => provisionConnection(
-          componentDescriptor,
-          connectionInfo,
-          provisionedSourceId,
-          provisionedDestinationId,
-          List(provisionedOperationId)
-        )
-    }
+    provisionedConnection          <- provisionConnection(
+      componentDescriptor,
+      connectionInfo,
+      provisionedSourceId,
+      provisionedDestinationId,
+      List(provisionedOperationId)
+    )
   } yield provisionedConnection
 
   private def unprovisionResource(

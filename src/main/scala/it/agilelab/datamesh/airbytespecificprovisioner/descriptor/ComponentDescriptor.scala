@@ -6,7 +6,6 @@ import io.circe.yaml.syntax.AsYaml
 import io.circe.{HCursor, Json}
 import it.agilelab.datamesh.airbytespecificprovisioner.common.Constants._
 import it.agilelab.datamesh.airbytespecificprovisioner.model.{SystemError, ValidationError}
-import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration
 
 final case class ComponentDescriptor(
     dpId: String,
@@ -16,9 +15,6 @@ final case class ComponentDescriptor(
     compHeader: Json,
     compSpecific: Json
 ) extends StrictLogging {
-
-  private val accessToken: String = ApplicationConfiguration.airbyteConfiguration.dbtGitToken
-  private val userName: String    = ApplicationConfiguration.airbyteConfiguration.dbtGitUser
 
   // ==== INFO FROM DATA PRODUCT HEADER =====================================================================
 
@@ -101,23 +97,6 @@ final case class ComponentDescriptor(
         case _                     => Left(ValidationError(Seq("Failed to retrieve connection name")))
       }
     case Left(error)       => Left(error)
-  }
-
-  def getDbtGitUrl: String = getComponentConnection match {
-    case Right(connection) => connection.hcursor.downField("dbtGitUrl").as[String] match {
-        case Right(url) => convertUrl(url)
-        case _          => ""
-      }
-    case _                 => ""
-  }
-
-  private def convertUrl(url: String): String = {
-    val splitArray    = url.split("(?<=//)")
-    val httpServer    = splitArray(0).patch(8, userName, 0)
-    val basePath      = splitArray(1).split("/")(0).patch(0, accessToken + "@", 0)
-    val directoryPath = splitArray(1).patch(0, "", 10)
-    val finalUrl      = httpServer + ":" + basePath + directoryPath
-    finalUrl
   }
 
   // ==== VALIDATION UTILITIES ================================================================================
