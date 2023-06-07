@@ -64,33 +64,75 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: SNOWFLAKE_HOST
-              value: {{ .Values.snowflake.host }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: SNOWFLAKE_HOST
             - name: SNOWFLAKE_USER
-              value: {{ .Values.snowflake.user }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: SNOWFLAKE_USER
             - name: SNOWFLAKE_PASSWORD
-              value: {{ .Values.snowflake.password }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: SNOWFLAKE_PASSWORD
             - name: SNOWFLAKE_ROLE
-              value: {{ .Values.snowflake.role }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: SNOWFLAKE_ROLE
             - name: SNOWFLAKE_WAREHOUSE
-              value: {{ .Values.snowflake.warehouse }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: SNOWFLAKE_WAREHOUSE
             - name: AIRBYTE_BASE_URL
-              value: {{ .Values.airbyte.baseUrl }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: AIRBYTE_BASE_URL
             - name: AIRBYTE_WORKSPACE_ID
-              value: {{ .Values.airbyte.workspaceId }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: AIRBYTE_WORKSPACE_ID
             - name: AIRBYTE_SOURCE_ID
-              value: {{ .Values.airbyte.sourceId }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: AIRBYTE_SOURCE_ID
             - name: AIRBYTE_DESTINATION_ID
-              value: {{ .Values.airbyte.destinationId }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: AIRBYTE_DESTINATION_ID
             - name: DBT_GIT_TOKEN
-              value: {{ .Values.airbyte.dbtGitToken }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: DBT_GIT_TOKEN
             - name: DBT_GIT_USER
-              value: {{ .Values.airbyte.dbtGitUser }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: DBT_GIT_USER
             - name: AIRBYTE_USERNAME
-              value: {{ .Values.airbyte.airbyteUser }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: AIRBYTE_USERNAME
             - name: AIRBYTE_PASSWORD
-              value: {{ .Values.airbyte.airbytePassword }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: AIRBYTE_PASSWORD
             - name: AIRBYTE_BASIC_AUTH_ENABLED
-              value: {{ .Values.airbyte.basicAuthEnabled }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-secrets
+                  key: AIRBYTE_BASIC_AUTH_ENABLED
           volumeMounts:
             - name: application-conf
               mountPath: /opt/docker/etc/app-conf
