@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: {{ template "airbytespecificprovisioner.name" . }}
+{{- include "airbytespecificprovisioner.labels" . | nindent 4 }}
+  name: {{ template "airbytespecificprovisioner.fullname" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ template "airbytespecificprovisioner.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "airbytespecificprovisioner.name" . }}
+        actorSystemName: {{ template "airbytespecificprovisioner.name" . }}
+    spec:
+      automountServiceAccountToken: false
+      {{- if .Values.dockerRegistrySecretName }}
+      imagePullSecrets:
+        - name: {{ .Values.dockerRegistrySecretName }}
+      {{- end}}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ template "airbytespecificprovisioner.fullname" . }}-config
+            defaultMode: 420
+      containers:
+        - name: {{ .Chart.Name }}
+          image: {{ .Values.image.registry }}:{{ .Values.image.tag }}
+          command: ["bin/datamesh-airbytespecificprovisioner"]
+          args: ["-Dconfig.file=etc/configs/application.conf", "-Dlogback.configurationFile=etc/configs/logback.xml", "-Dconfig.override_with_env_vars=true"]
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: management
+              containerPort: 8558
+              protocol: TCP
+            - name: http
+              containerPort: 8093
+              protocol: TCP
+          {{- if .Values.securityContext }}
+          securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- end }}
+          {{- if .Values.readinessProbe }}
+          readinessProbe: {{- toYaml .Values.readinessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.livenessProbe }}
+          livenessProbe: {{- toYaml .Values.livenessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.resources }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: SNOWFLAKE_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: SNOWFLAKE_HOST
+            - name: SNOWFLAKE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: SNOWFLAKE_USER
+            - name: SNOWFLAKE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: SNOWFLAKE_PASSWORD
+            - name: SNOWFLAKE_ROLE
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: SNOWFLAKE_ROLE
+            - name: SNOWFLAKE_WAREHOUSE
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: SNOWFLAKE_WAREHOUSE
+            - name: AIRBYTE_BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: AIRBYTE_BASE_URL
+            - name: AIRBYTE_WORKSPACE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: AIRBYTE_WORKSPACE_ID
+            - name: AIRBYTE_SOURCE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: AIRBYTE_SOURCE_ID
+            - name: AIRBYTE_DESTINATION_ID
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: AIRBYTE_DESTINATION_ID
+            - name: DBT_GIT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: DBT_GIT_TOKEN
+            - name: DBT_GIT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: DBT_GIT_USER
+            - name: AIRBYTE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: AIRBYTE_USERNAME
+            - name: AIRBYTE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: AIRBYTE_PASSWORD
+            - name: AIRBYTE_BASIC_AUTH_ENABLED
+              valueFrom:
+                secretKeyRef:
+                  name: witboost-secrets
+                  key: AIRBYTE_BASIC_AUTH_ENABLED
+          volumeMounts:
+            - name: config
+              mountPath: /opt/docker/etc/configs

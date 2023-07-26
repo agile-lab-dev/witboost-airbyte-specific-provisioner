@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "airbytespecificprovisioner.name" . }}
+  labels:
+  {{- include "airbytespecificprovisioner.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8093
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ template "airbytespecificprovisioner.name" . }}
