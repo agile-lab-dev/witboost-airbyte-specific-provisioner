@@ -59,72 +59,72 @@ spec:
             - name: SNOWFLAKE_HOST
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: SNOWFLAKE_HOST
             - name: SNOWFLAKE_USER
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: SNOWFLAKE_USER
             - name: SNOWFLAKE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: SNOWFLAKE_PASSWORD
             - name: SNOWFLAKE_ROLE
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: SNOWFLAKE_ROLE
             - name: SNOWFLAKE_WAREHOUSE
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: SNOWFLAKE_WAREHOUSE
             - name: AIRBYTE_BASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: AIRBYTE_BASE_URL
             - name: AIRBYTE_WORKSPACE_ID
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: AIRBYTE_WORKSPACE_ID
             - name: AIRBYTE_SOURCE_ID
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: AIRBYTE_SOURCE_ID
             - name: AIRBYTE_DESTINATION_ID
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: AIRBYTE_DESTINATION_ID
             - name: DBT_GIT_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: DBT_GIT_TOKEN
             - name: DBT_GIT_USER
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: DBT_GIT_USER
             - name: AIRBYTE_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: AIRBYTE_USERNAME
             - name: AIRBYTE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: AIRBYTE_PASSWORD
             - name: AIRBYTE_BASIC_AUTH_ENABLED
               valueFrom:
                 secretKeyRef:
-                  name: witboost-secrets
+                  name: witboost-addons-secrets
                   key: AIRBYTE_BASIC_AUTH_ENABLED
           volumeMounts:
             - name: config
