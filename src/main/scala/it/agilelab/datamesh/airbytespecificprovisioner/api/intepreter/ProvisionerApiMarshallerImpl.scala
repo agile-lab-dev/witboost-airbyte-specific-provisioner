@@ -34,6 +34,8 @@ class ProvisionerApiMarshallerImpl extends SpecificProvisionerApiMarshaller {
 
   implicit val validationErrorEncoder: Encoder[ValidationError] = deriveEncoder[ValidationError]
 
+  implicit val errorMoreInfo: Encoder[ErrorMoreInfo] = deriveEncoder[ErrorMoreInfo]
+
   implicit override def toEntityMarshallerValidationError: ToEntityMarshaller[ValidationError] =
     marshaller[ValidationError]
 

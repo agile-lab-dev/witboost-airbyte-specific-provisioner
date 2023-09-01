@@ -37,8 +37,10 @@ class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager) 
       toEntityMarshallerValidationError: ToEntityMarshaller[ValidationError]
   ): Route =
     airbyteWorkloadManager.provision(provisioningRequest.descriptorKind, provisioningRequest.descriptor) match {
-      case Left(e @ ValidationError(_)) => provision400(e)
-      case Left(e @ SystemError(_))     => provision500(e)
+      case Left(err)  => err match {
+          case e: ValidationError => provision400(e)
+          case e: SystemError     => provision500(e)
+        }
       case Right(res) => provision200(ProvisioningStatus(ProvisioningStatusEnums.StatusEnum.COMPLETED, Some(res)))
       case _          => provision500(SystemError("generic error"))
     }
@@ -65,8 +67,10 @@ class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager) 
       toEntityMarshallerValidationError: ToEntityMarshaller[ValidationError]
   ): Route =
     airbyteWorkloadManager.unprovision(provisioningRequest.descriptorKind, provisioningRequest.descriptor) match {
-      case Left(e @ ValidationError(_)) => unprovision400(e)
-      case Left(e @ SystemError(_))     => unprovision500(e)
+      case Left(err)  => err match {
+          case e: ValidationError => unprovision400(e)
+          case e: SystemError     => unprovision500(e)
+        }
       case Right(res) => unprovision200(ProvisioningStatus(ProvisioningStatusEnums.StatusEnum.COMPLETED, Some(res)))
       case _          => unprovision500(SystemError("generic error"))
     }
