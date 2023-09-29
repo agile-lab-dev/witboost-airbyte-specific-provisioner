@@ -4,15 +4,17 @@ import sbt._
 object Dependencies {
 
   private[this] object akka {
-    lazy val namespace     = "com.typesafe.akka"
-    lazy val actorTyped    = namespace                       %% "akka-actor-typed"     % akkaVersion
-    lazy val stream        = namespace                       %% "akka-stream-typed"    % akkaVersion
-    lazy val http          = namespace                       %% "akka-http"            % akkaHttpVersion
-    lazy val httpSprayJson = namespace                       %% "akka-http-spray-json" % akkaHttpVersion
-    lazy val httpCirceJson = "de.heikoseeberger"             %% "akka-http-circe"      % akkaHttpJsonVersion
-    lazy val httpJson4s    = "de.heikoseeberger"             %% "akka-http-json4s"     % akkaHttpJsonVersion
-    lazy val management    = "com.lightbend.akka.management" %% "akka-management"      % akkaManagementVersion
-    lazy val slf4j         = namespace                       %% "akka-slf4j"           % akkaVersion
+    lazy val namespace       = "com.typesafe.akka"
+    lazy val actorTyped      = namespace                       %% "akka-actor-typed"     % akkaVersion
+    lazy val stream          = namespace                       %% "akka-stream-typed"    % akkaVersion
+    lazy val http            = namespace                       %% "akka-http"            % akkaHttpVersion
+    lazy val httpSprayJson   = namespace                       %% "akka-http-spray-json" % akkaHttpVersion
+    lazy val httpCirceJson   = "de.heikoseeberger"             %% "akka-http-circe"      % akkaHttpJsonVersion
+    lazy val httpJson4s      = "de.heikoseeberger"             %% "akka-http-json4s"     % akkaHttpJsonVersion
+    lazy val management      = "com.lightbend.akka.management" %% "akka-management"      % akkaManagementVersion
+    lazy val slf4j           = namespace                       %% "akka-slf4j"           % akkaVersion
+    lazy val akkaTestKit     = "com.typesafe.akka"             %% "akka-testkit"         % akkaVersion
+    lazy val akkaHttpTestKit = "com.typesafe.akka"             %% "akka-http-testkit"    % akkaHttpVersion
   }
 
   private[this] object graph {
@@ -102,6 +104,11 @@ object Dependencies {
     lazy val core      = namespace %% "scalatest" % scalatestVersion
   }
 
+  private[this] object scalamock {
+    lazy val namespace = "org.scalamock"
+    lazy val core      = namespace %% "scalamock" % "5.2.0"
+  }
+
   object Jars {
 
     lazy val overrides: Seq[ModuleID] = Seq(
@@ -136,7 +143,10 @@ object Dependencies {
       logback.classic              % Compile,
       openapi4j.operationValidator % Compile,
       h2database.jdbc              % Compile,
-      scalatest.core               % Test
+      scalatest.core               % Test,
+      scalamock.core               % Test,
+      akka.akkaTestKit             % Test,
+      akka.akkaHttpTestKit         % Test
     )
 
     lazy val client: Seq[ModuleID] = Seq(
