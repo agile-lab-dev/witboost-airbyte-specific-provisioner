@@ -19,8 +19,10 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
 
   private def getIdFromCreationResponse(creationResponse: String, field: String): Either[Product, String] = {
     val creationResponseJson = parser.parse(creationResponse).getOrElse(Json.Null)
-    creationResponseJson.hcursor.downField(field).as[String].left
-      .map(_ => SystemError(s"Failed to get $field from response"))
+    creationResponseJson.hcursor.downField(field).as[String].left.map { e =>
+      logger.error(s"Failed to get $field from response", e)
+      SystemError(s"Failed to get $field from response")
+    }
   }
 
   private def provisionSource(componentDescriptor: ComponentDescriptor): Either[Product, String] = for {
@@ -44,12 +46,16 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
             )))
           )
         )))
-      case _                       => Left(SystemError("Unable to process source connection config"))
+      case Left(e)                 =>
+        logger.error("Unable to process source connection config", e)
+        Left(SystemError("Unable to process source connection config"))
     }
 
   private def getConnectionConfiguration(componentDestination: Json): Either[Product, Json] = componentDestination
-    .hcursor.downField("connectionConfiguration").as[Json].left
-    .map(_ => SystemError(s"Failed to get connectionConfiguration from destination"))
+    .hcursor.downField("connectionConfiguration").as[Json].left.map { e =>
+      logger.error("Failed to get connectionConfiguration from destination", e)
+      SystemError(s"Failed to get connectionConfiguration from destination")
+    }
 
   private def getDatabase(
       componentDescriptor: ComponentDescriptor,
@@ -157,9 +163,13 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
   private def getConnectionInfo(schemaResponse: String): Either[Product, Json] = {
     val schemaResponseJson = parser.parse(schemaResponse).getOrElse(Json.Null)
     schemaResponseJson.hcursor.downField("catalog").as[Json] match {
-      case Left(_)        => Left(SystemError(s"Failed to get catalog from response"))
+      case Left(e)        =>
+        logger.error("Failed to get catalog from response", e)
+        Left(SystemError(s"Failed to get catalog from response"))
       case Right(catalog) => catalog.hcursor.downField("streams").downArray.as[Json] match {
-          case Left(_)            => Left(SystemError(s"Failed to get streams from response"))
+          case Left(e)            =>
+            logger.error("Failed to get streams from response", e)
+            Left(SystemError(s"Failed to get streams from response"))
           case Right(streamsJson) =>
             val filteredStreams: Option[Json] = streamsJson.hcursor.downField("stream").downField("jsonSchema")
               .withFocus(_.asObject.map(_.filterKeys(!_.equals("$schema")).asJson).get).top
@@ -169,9 +179,13 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
                   .withFocus(_.mapString(_ => "overwrite")).top
                 updatedStreams match {
                   case Some(value) => Right(catalog.deepMerge(Json.obj(("streams", Json.arr(value)))))
-                  case _           => Left(SystemError("Unable to process stream config"))
+                  case _           =>
+                    logger.error("Unable to process stream config")
+                    Left(SystemError("Unable to process stream config"))
                 }
-              case _           => Left(SystemError("Unable to process stream jsonSchema"))
+              case _           =>
+                logger.error("Unable to process stream jsonSchema")
+                Left(SystemError("Unable to process stream jsonSchema"))
             }
         }
     }

@@ -94,19 +94,35 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
       ApplicationConfiguration.airbyteConfiguration.airbytePassword,
       ApplicationConfiguration.airbyteConfiguration.basicAuth.replace("'", "").toBooleanOption.getOrElse(false)
     )
-    val httpResponse   = Await
-      .result(futureResponse, ApplicationConfiguration.airbyteConfiguration.invocationTimeout seconds)
-    httpResponseUnmarshaller(httpResponse) match {
-      case Success(response) => httpResponse.status.intValue() match {
-          case 200 | 204 => Right(response)
-          case 400       =>
-            Left(SystemError(s"Airbyte failed to validate request for ${resource}s/$action endpoint: $response"))
-          case _         => Left(SystemError(
-              s"Request to ${resource}s/$action endpoint failed with error: ${httpResponse.status.toString}"
-            ))
+
+    val tryHttpResponse =
+      Try(Await.result(futureResponse, ApplicationConfiguration.airbyteConfiguration.invocationTimeout seconds))
+
+    tryHttpResponse match {
+      case Failure(e)            =>
+        logger.error(s"No response received from Airbyte while invoking ${resource}s/$action endpoint", e)
+        Left(SystemError(
+          s"No response received from Airbyte while invoking ${resource}s/$action endpoint. Please try again, if the issue persists contact the platform team"
+        ))
+      case Success(httpResponse) => httpResponseUnmarshaller(httpResponse) match {
+          case Success(response) =>
+            logger.info(
+              s"Response from Airbyte after invoking ${resource}s/$action endpoint: (${httpResponse.status.value}) $response"
+            )
+            httpResponse.status.intValue() match {
+              case 200 | 204 => Right(response)
+              case 400       =>
+                Left(SystemError(s"Airbyte failed to validate request for ${resource}s/$action endpoint: $response"))
+              case _         => Left(SystemError(
+                  s"Request to ${resource}s/$action endpoint failed with error: ${httpResponse.status.toString}"
+                ))
+            }
+          case Failure(e)        =>
+            logger.error("Failed to unmarshal the Airbyte response", e)
+            Left(SystemError("Failed to unmarshal the Airbyte response, contact the platform team for assistance"))
         }
-      case Failure(e)        => Left(SystemError(e.getMessage))
     }
+
   }
 
   private def getMaybeAlreadyExistingResourceId(
