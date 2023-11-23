@@ -1,175 +1,136 @@
 package it.agilelab.datamesh.airbytespecificprovisioner.integrator
 
+import cats.data.ValidatedNel
+import cats.implicits._
 import com.typesafe.scalalogging.StrictLogging
 import io.circe.syntax.EncoderOps
 import io.circe.{parser, Json}
 import it.agilelab.datamesh.airbytespecificprovisioner.common.Constants.{CONNECTION, DESTINATION, OPERATION, SOURCE}
-import it.agilelab.datamesh.airbytespecificprovisioner.descriptor.{ComponentDescriptor, ComponentExtractor}
-import it.agilelab.datamesh.airbytespecificprovisioner.model.{
-  COMPONENT_DESCRIPTOR,
-  DescriptorKind,
-  SystemError,
-  ValidationError
+import it.agilelab.datamesh.airbytespecificprovisioner.error.{
+  ErrorType,
+  GetConnectionInfoErrorType,
+  GetIdFromCreationErrorType,
+  ValidationErrorType
 }
+import it.agilelab.datamesh.airbytespecificprovisioner.model.{AirbyteFields, DescriptorKind}
 import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration
+import it.agilelab.datamesh.airbytespecificprovisioner.validation.Validator
 
-class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging {
+class AirbyteWorkloadManager(validator: Validator, airbyteClient: Client) extends StrictLogging {
 
   private val workspaceId: String = ApplicationConfiguration.airbyteConfiguration.workspaceId
 
-  private def getIdFromCreationResponse(creationResponse: String, field: String): Either[Product, String] = {
-    val creationResponseJson = parser.parse(creationResponse).getOrElse(Json.Null)
-    creationResponseJson.hcursor.downField(field).as[String].left.map { e =>
-      logger.error(s"Failed to get $field from response", e)
-      SystemError(s"Failed to get $field from response")
-    }
-  }
+  def validate(descriptorKind: DescriptorKind, descriptor: String): ValidatedNel[ValidationErrorType, AirbyteFields] =
+    validator.validate(descriptorKind, descriptor)
 
-  private def provisionSource(componentDescriptor: ComponentDescriptor): Either[Product, String] = for {
-    source                 <- componentDescriptor.getComponentSource
-    sourceInfo             <- getSourceInfo(source)
-    sourceCreationResponse <- airbyteClient.createOrRecreate(workspaceId, sourceInfo, SOURCE)
-  } yield sourceCreationResponse
-
-  private def getSourceInfo(source: Json): Either[Product, Json] =
-    source.hcursor.downField("connectionConfiguration").as[Json] match {
-      case Right(connectionConfig) => Right(source.deepMerge(Json.obj(
-          ("workspaceId", Json.fromString(workspaceId)),
-          ("sourceDefinitionId", Json.fromString(ApplicationConfiguration.airbyteConfiguration.sourceId)),
-          (
-            "connectionConfiguration",
-            connectionConfig.deepMerge(Json.obj((
-              "reader_options",
-              Json.fromString(
-                "{\"keep_default_na\": false, \"na_values\": [\"-1.#IND\", \"1.#QNAN\", \"1.#IND\", \"-1.#QNAN\", \"#N/A N/A\", \"#N/A\", \"N/A\", \"n/a\", \"\", \"#NA\", \"NULL\", \"null\", \"NaN\", \"-NaN\", \"nan\", \"-nan\"]}"
+  def provision(descriptorKind: DescriptorKind, descriptor: String): ValidatedNel[ErrorType, String] = validator
+    .validate(descriptorKind, descriptor).andThen(airbyteFields =>
+      provisionSource(airbyteFields).andThen(sourceResponse =>
+        provisionDestination(airbyteFields).andThen(destinationResponse =>
+          provisionOperation().andThen(operationResponse =>
+            getIdFromCreationResponse(sourceResponse, "sourceId").andThen(provisionedSourceId =>
+              getIdFromCreationResponse(destinationResponse, "destinationId").andThen(provisionedDestinationId =>
+                getIdFromCreationResponse(operationResponse, "operationId").andThen(provisionedOperationId =>
+                  airbyteClient.discoverSchema(provisionedSourceId).toValidatedNel.andThen(discoveredSchemaResponse =>
+                    getConnectionInfo(discoveredSchemaResponse).andThen(connectionInfo =>
+                      provisionConnection(
+                        airbyteFields.connection.name,
+                        connectionInfo,
+                        provisionedSourceId,
+                        provisionedDestinationId,
+                        List(provisionedOperationId)
+                      )
+                    )
+                  )
+                )
               )
-            )))
+            )
+          )
+        )
+      )
+    )
+
+  def unprovision(descriptorKind: DescriptorKind, descriptor: String): ValidatedNel[ErrorType, Unit] = validator
+    .validate(descriptorKind, descriptor).andThen(airbyteFields =>
+      unprovisionResource(airbyteFields, CONNECTION).andThen(_ =>
+        (unprovisionResource(airbyteFields, DESTINATION), unprovisionResource(airbyteFields, SOURCE)).mapN((_, _) => ())
+      )
+    )
+
+  private def provisionSource(airbyteFields: AirbyteFields) = {
+    val finalSource = airbyteFields.source.raw.deepMerge(Json.obj(
+      ("workspaceId", Json.fromString(workspaceId)),
+      ("sourceDefinitionId", Json.fromString(ApplicationConfiguration.airbyteConfiguration.sourceId)),
+      (
+        "connectionConfiguration",
+        airbyteFields.source.connectionConfiguration.deepMerge(Json.obj((
+          "reader_options",
+          Json.fromString(
+            "{\"keep_default_na\": false, \"na_values\": [\"-1.#IND\", \"1.#QNAN\", \"1.#IND\", \"-1.#QNAN\", \"#N/A N/A\", \"#N/A\", \"N/A\", \"n/a\", \"\", \"#NA\", \"NULL\", \"null\", \"NaN\", \"-NaN\", \"nan\", \"-nan\"]}"
           )
         )))
-      case Left(e)                 =>
-        logger.error("Unable to process source connection config", e)
-        Left(SystemError("Unable to process source connection config"))
-    }
-
-  private def getConnectionConfiguration(componentDestination: Json): Either[Product, Json] = componentDestination
-    .hcursor.downField("connectionConfiguration").as[Json].left.map { e =>
-      logger.error("Failed to get connectionConfiguration from destination", e)
-      SystemError(s"Failed to get connectionConfiguration from destination")
-    }
-
-  private def getDatabase(
-      componentDescriptor: ComponentDescriptor,
-      connectionConfiguration: Json
-  ): Either[Product, String] = connectionConfiguration.hcursor.downField("database").as[String] match {
-    case Right(value) if value.nonEmpty => Right(value)
-    case _                              => componentDescriptor.getDataProductDomain
+      )
+    ))
+    airbyteClient.deleteAndRecreate(workspaceId, finalSource, airbyteFields.source.name, SOURCE).toValidatedNel
   }
 
-  private def getDatabaseSchema(
-      componentDescriptor: ComponentDescriptor,
-      connectionConfiguration: Json
-  ): Either[Product, String] = for {
-    dpName    <- componentDescriptor.getDataProductName
-    dpVersion <- componentDescriptor.getDataProductVersion
-    schema    <- connectionConfiguration.hcursor.downField("schema").as[String] match {
-      case Right(value) if value.nonEmpty => Right(value)
-      case _ => Right(s"${dpName.toUpperCase.replaceAll(" ", "")}_${dpVersion.split('.')(0)}")
-    }
-  } yield schema
-
-  private def getDestinationInfo(
-      componentDestination: Json,
-      connectionConfiguration: Json,
-      database: String,
-      schema: String
-  ): Either[Product, Json] = {
-    val password: Json = Json
-      .obj(("password", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.password)))
-
-    val method: Json = Json.obj(("method", Json.fromString("Internal Staging")))
-
-    Right(componentDestination.deepMerge(Json.obj((
-      "connectionConfiguration",
-      connectionConfiguration.deepMerge(Json.obj(
-        ("host", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.host)),
-        ("role", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.role)),
-        ("username", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.user)),
-        ("warehouse", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.warehouse)),
-        ("database", Json.fromString(database.toUpperCase())),
-        ("schema", Json.fromString(schema)),
-        ("credentials", password),
-        ("loading_method", method)
-      ))
-    ))))
-  }
-
-  private def provisionDestination(componentDescriptor: ComponentDescriptor): Either[Product, String] = for {
-    destination                 <- componentDescriptor.getComponentDestination
-    connectionConfiguration     <- getConnectionConfiguration(destination)
-    db                          <- getDatabase(componentDescriptor, connectionConfiguration)
-    dbSchema                    <- getDatabaseSchema(componentDescriptor, connectionConfiguration)
-    destinationInfo             <- getDestinationInfo(destination, connectionConfiguration, db, dbSchema)
-    destinationCreationResponse <- airbyteClient.createOrRecreate(
+  private def provisionDestination(airbyteFields: AirbyteFields) = {
+    val database        = getDatabase(airbyteFields)
+    val schema          = getDatabaseSchema(airbyteFields)
+    val destinationInfo = getDestinationInfo(
+      airbyteFields.destination.raw,
+      airbyteFields.destination.connectionConfiguration,
+      database,
+      schema
+    )
+    airbyteClient.deleteAndRecreate(
       workspaceId,
       destinationInfo.deepMerge(Json.obj(
         ("workspaceId", Json.fromString(workspaceId)),
         ("destinationDefinitionId", Json.fromString(ApplicationConfiguration.airbyteConfiguration.destinationId))
       )),
+      airbyteFields.destination.name,
       DESTINATION
-    )
-  } yield destinationCreationResponse
+    ).toValidatedNel
+  }
 
-  private def provisionOperation(): Either[Product, String] = for {
-    operationCreationResponse <- airbyteClient.createOrRecreate(
-      workspaceId,
-      Json.obj(
-        ("workspaceId", Json.fromString(workspaceId)),
-        ("name", Json.fromString("Basic normalization")),
-        (
-          "operatorConfiguration",
-          Json.obj(
-            ("operatorType", Json.fromString("normalization")),
-            ("normalization", Json.obj(("option", Json.fromString("basic"))))
-          )
+  private def provisionOperation() = airbyteClient.create(
+    workspaceId,
+    Json.obj(
+      ("workspaceId", Json.fromString(workspaceId)),
+      ("name", Json.fromString("Basic normalization")),
+      (
+        "operatorConfiguration",
+        Json.obj(
+          ("operatorType", Json.fromString("normalization")),
+          ("normalization", Json.obj(("option", Json.fromString("basic"))))
         )
-      ),
-      OPERATION
-    )
-  } yield operationCreationResponse
+      )
+    ),
+    OPERATION
+  ).toValidatedNel
 
-  private def provisionConnection(
-      componentDescriptor: ComponentDescriptor,
-      connectionInfo: Json,
-      provisionedSourceId: String,
-      provisionedDestinationId: String,
-      provisionedOperationIds: List[String]
-  ): Either[Product, String] = for {
-    connectionName              <- componentDescriptor.getConnectionName
-    connectionCreationResponses <- airbyteClient.createOrRecreate(
-      workspaceId,
-      Json.obj(
-        ("syncCatalog", connectionInfo),
-        ("sourceId", Json.fromString(provisionedSourceId)),
-        ("destinationId", Json.fromString(provisionedDestinationId)),
-        ("operationIds", provisionedOperationIds.asJson),
-        ("scheduleType", Json.fromString("manual")),
-        ("status", Json.fromString("active")),
-        ("name", Json.fromString(connectionName))
-      ),
-      CONNECTION
-    )
-  } yield connectionCreationResponses
+  private def getIdFromCreationResponse(creationResponse: String, field: String) = parser.parse(creationResponse)
+    .leftMap { e =>
+      logger.error(s"Failed to parse creation response", e)
+      GetIdFromCreationErrorType(s"Failed to parse creation response. Details: ${e.getMessage}")
+    }.toValidatedNel.andThen { creationResponseJson =>
+      creationResponseJson.hcursor.downField(field).as[String].leftMap { e =>
+        logger.error(s"Failed to get $field from response", e)
+        GetIdFromCreationErrorType(s"Failed to get $field from response")
+      }.toValidatedNel
+    }
 
-  private def getConnectionInfo(schemaResponse: String): Either[Product, Json] = {
+  private def getConnectionInfo(schemaResponse: String) = {
     val schemaResponseJson = parser.parse(schemaResponse).getOrElse(Json.Null)
-    schemaResponseJson.hcursor.downField("catalog").as[Json] match {
+    val info               = schemaResponseJson.hcursor.downField("catalog").as[Json] match {
       case Left(e)        =>
         logger.error("Failed to get catalog from response", e)
-        Left(SystemError(s"Failed to get catalog from response"))
+        Left(GetConnectionInfoErrorType(s"Failed to get catalog from response"))
       case Right(catalog) => catalog.hcursor.downField("streams").downArray.as[Json] match {
           case Left(e)            =>
             logger.error("Failed to get streams from response", e)
-            Left(SystemError(s"Failed to get streams from response"))
+            Left(GetConnectionInfoErrorType(s"Failed to get streams from response"))
           case Right(streamsJson) =>
             val filteredStreams: Option[Json] = streamsJson.hcursor.downField("stream").downField("jsonSchema")
               .withFocus(_.asObject.map(_.filterKeys(!_.equals("$schema")).asJson).get).top
@@ -181,74 +142,82 @@ class AirbyteWorkloadManager(airbyteClient: AirbyteClient) extends StrictLogging
                   case Some(value) => Right(catalog.deepMerge(Json.obj(("streams", Json.arr(value)))))
                   case _           =>
                     logger.error("Unable to process stream config")
-                    Left(SystemError("Unable to process stream config"))
+                    Left(GetConnectionInfoErrorType("Unable to process stream config"))
                 }
               case _           =>
                 logger.error("Unable to process stream jsonSchema")
-                Left(SystemError("Unable to process stream jsonSchema"))
+                Left(GetConnectionInfoErrorType("Unable to process stream jsonSchema"))
             }
         }
     }
+    info.toValidatedNel
   }
 
-  private def provisionComponent(componentDescriptor: ComponentDescriptor): Either[Product, String] = for {
-    provisionedSourceResponse      <- provisionSource(componentDescriptor)
-    provisionedDestinationResponse <- provisionDestination(componentDescriptor)
-    provisionedOperation           <- provisionOperation()
-    provisionedSourceId            <- getIdFromCreationResponse(provisionedSourceResponse, "sourceId")
-    provisionedDestinationId       <- getIdFromCreationResponse(provisionedDestinationResponse, "destinationId")
-    provisionedOperationId         <- getIdFromCreationResponse(provisionedOperation, "operationId")
-    discoveredSchemaResponse       <- airbyteClient.discoverSchema(provisionedSourceId)
-    connectionInfo                 <- getConnectionInfo(discoveredSchemaResponse)
-    provisionedConnection          <- provisionConnection(
-      componentDescriptor,
-      connectionInfo,
-      provisionedSourceId,
-      provisionedDestinationId,
-      List(provisionedOperationId)
-    )
-  } yield provisionedConnection
+  private def provisionConnection(
+      connectionName: String,
+      connectionInfo: Json,
+      provisionedSourceId: String,
+      provisionedDestinationId: String,
+      provisionedOperationIds: List[String]
+  ) = airbyteClient.deleteAndRecreate(
+    workspaceId,
+    Json.obj(
+      ("syncCatalog", connectionInfo),
+      ("sourceId", Json.fromString(provisionedSourceId)),
+      ("destinationId", Json.fromString(provisionedDestinationId)),
+      ("operationIds", provisionedOperationIds.asJson),
+      ("scheduleType", Json.fromString("manual")),
+      ("status", Json.fromString("active")),
+      ("name", Json.fromString(connectionName))
+    ),
+    connectionName,
+    CONNECTION
+  ).toValidatedNel
 
-  private def unprovisionResource(
-      componentDescriptor: ComponentDescriptor,
-      resourceType: String
-  ): Either[Product, String] = for {
-    resource               <- resourceType match {
-      case SOURCE      => componentDescriptor.getComponentSource
-      case DESTINATION => componentDescriptor.getComponentDestination
-      case CONNECTION  => componentDescriptor.getComponentConnection
+  private def getDatabase(airbyteFields: AirbyteFields) =
+    airbyteFields.destination.connectionConfiguration.hcursor.downField("database").as[String] match {
+      case Right(value) if value.nonEmpty => value
+      case _                              => airbyteFields.dpFields.domain
     }
-    sourceDeletionResponse <- airbyteClient
-      .delete(workspaceId, resource.deepMerge(Json.obj(("workspaceId", Json.fromString(workspaceId)))), resourceType)
-  } yield sourceDeletionResponse
 
-  private def unprovisionComponent(componentDescriptor: ComponentDescriptor): Either[Product, String] = for {
-    unprovisionedConnectionResponse <- unprovisionResource(componentDescriptor, CONNECTION)
-    _                               <- unprovisionResource(componentDescriptor, DESTINATION)
-    _                               <- unprovisionResource(componentDescriptor, SOURCE)
-  } yield unprovisionedConnectionResponse
+  private def getDatabaseSchema(airbyteFields: AirbyteFields) =
+    airbyteFields.destination.connectionConfiguration.hcursor.downField("schema").as[String] match {
+      case Right(value) if value.nonEmpty => value
+      case _                              =>
+        s"${airbyteFields.dpFields.name.toUpperCase.replaceAll(" ", "")}_${airbyteFields.dpFields.version.split('.')(0)}"
+    }
 
-  private def runTask(
-      descriptor: String,
-      compApplication: ComponentDescriptor => Either[Product, String]
-  ): Either[Product, String] = for {
-    dpHeaderAndComponent <- ComponentExtractor.extract(descriptor)
-    componentDescriptor  <- ComponentDescriptor(dpHeaderAndComponent._1, dpHeaderAndComponent._2)
-    responses            <- compApplication(componentDescriptor)
-  } yield responses
-
-  def provision(descriptorKind: DescriptorKind, descriptor: String): Either[Product, String] = descriptorKind match {
-    case COMPONENT_DESCRIPTOR =>
-      logger.info("Invoking method {}", "provisionComponent")
-      runTask(descriptor, provisionComponent)
-    case _ => Left(ValidationError(Seq("Descriptor kind must be COMPONENT_DESCRIPTOR for /provision API")))
+  private def getDestinationInfo(
+      componentDestination: Json,
+      connectionConfiguration: Json,
+      database: String,
+      schema: String
+  ) = {
+    val password: Json = Json
+      .obj(("password", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.password)))
+    val method: Json   = Json.obj(("method", Json.fromString("Internal Staging")))
+    componentDestination.deepMerge(Json.obj((
+      "connectionConfiguration",
+      connectionConfiguration.deepMerge(Json.obj(
+        ("host", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.host)),
+        ("role", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.role)),
+        ("username", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.user)),
+        ("warehouse", Json.fromString(ApplicationConfiguration.snowflakeConfiguration.warehouse)),
+        ("database", Json.fromString(database.toUpperCase())),
+        ("schema", Json.fromString(schema)),
+        ("credentials", password),
+        ("loading_method", method)
+      ))
+    )))
   }
 
-  def unprovision(descriptorKind: DescriptorKind, descriptor: String): Either[Product, String] = descriptorKind match {
-    case COMPONENT_DESCRIPTOR =>
-      logger.info("Invoking method {}", "unprovisionComponent")
-      runTask(descriptor, unprovisionComponent)
-    case _ => Left(ValidationError(Seq("Descriptor kind must be COMPONENT_DESCRIPTOR for /unprovision API")))
+  private def unprovisionResource(airbyteFields: AirbyteFields, resourceType: String) = {
+    val resourceName = resourceType match {
+      case SOURCE      => airbyteFields.source.name
+      case DESTINATION => airbyteFields.destination.name
+      case CONNECTION  => airbyteFields.connection.name
+    }
+    airbyteClient.delete(workspaceId, resourceName, resourceType).toValidatedNel
   }
 
 }

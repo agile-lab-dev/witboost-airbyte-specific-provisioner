@@ -1,11 +1,16 @@
 package it.agilelab.datamesh.airbytespecificprovisioner.descriptor
 
 import io.circe.Json
-import it.agilelab.datamesh.airbytespecificprovisioner.model.ValidationError
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.EitherValues._
 import org.scalatest.matchers.should.Matchers._
 import it.agilelab.datamesh.airbytespecificprovisioner.common.test.getTestResourceAsString
+import it.agilelab.datamesh.airbytespecificprovisioner.error.{
+  InvalidComponent,
+  InvalidDescriptor,
+  ParseFailureDescriptor,
+  ValidationErrorType
+}
 
 class DescriptorParserSpec extends AnyFlatSpec {
 
@@ -23,9 +28,9 @@ class DescriptorParserSpec extends AnyFlatSpec {
 
     val descriptor = getTestResourceAsString("pr_descriptors/pr_descriptor_1_missing_component_id.yml")
 
-    val dp: Either[ValidationError, (Json, Json)] = ComponentExtractor.extract(descriptor)
+    val dp: Either[ValidationErrorType, (Json, Json)] = ComponentExtractor.extract(descriptor)
 
-    dp.left.value.errors.head shouldBe "Input data product descriptor is invalid"
+    dp.left.value shouldBe InvalidDescriptor()
 
   }
 
@@ -33,9 +38,9 @@ class DescriptorParserSpec extends AnyFlatSpec {
 
     val descriptor = getTestResourceAsString("pr_descriptors/pr_descriptor_1_missing_components.yml")
 
-    val dp: Either[ValidationError, (Json, Json)] = ComponentExtractor.extract(descriptor)
+    val dp: Either[ValidationErrorType, (Json, Json)] = ComponentExtractor.extract(descriptor)
 
-    dp.left.value.errors.head shouldBe "Input data product descriptor is invalid"
+    dp.left.value shouldBe InvalidDescriptor()
 
   }
 
@@ -48,8 +53,7 @@ class DescriptorParserSpec extends AnyFlatSpec {
 
       val component = ComponentDescriptor(dpHeaderAndComponent._1, dpHeaderAndComponent._2)
 
-      component.left.value.errors.head shouldBe
-        "The workload urn:dmb:cmp:finance:cashflow:0:cashflows-calculation descriptor is not valid"
+      component.left.value shouldBe InvalidComponent("urn:dmb:cmp:finance:cashflow:0:cashflows-calculation")
 
     }
 
@@ -59,28 +63,9 @@ class DescriptorParserSpec extends AnyFlatSpec {
                        |[]
                        |""".stripMargin
 
-    val dp: Either[ValidationError, (Json, Json)] = ComponentExtractor.extract(descriptor)
+    val dp: Either[ValidationErrorType, (Json, Json)] = ComponentExtractor.extract(descriptor)
 
-    dp.left.value.errors.head shouldBe "Input data product descriptor cannot be parsed"
+    dp.left.value should matchPattern { case ParseFailureDescriptor(_) => }
   }
 
-  "Parsing a well formed descriptor" should "return the correct connection name" in {
-    val descriptor = getTestResourceAsString("pr_descriptors/pr_descriptor_1.yml")
-
-    val dpHeaderAndComponent = ComponentExtractor.extract(descriptor).toOption.get
-
-    val component = ComponentDescriptor(dpHeaderAndComponent._1, dpHeaderAndComponent._2).toOption.get
-
-    component.getConnectionName.toOption.get shouldBe "Public Places Assaults CSV <> Snowflake"
-  }
-
-  "Parsing a wrongly formed descriptor with missing connection name" should "return a Left with an Error" in {
-    val descriptor = getTestResourceAsString("pr_descriptors/pr_descriptor_1_missing_connection_name.yml")
-
-    val dpHeaderAndComponent = ComponentExtractor.extract(descriptor).toOption.get
-
-    val component = ComponentDescriptor(dpHeaderAndComponent._1, dpHeaderAndComponent._2).toOption.get
-
-    component.getConnectionName.left.value.errors.head shouldBe "Failed to retrieve connection name"
-  }
 }

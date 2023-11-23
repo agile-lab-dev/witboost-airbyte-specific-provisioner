@@ -16,6 +16,7 @@ import it.agilelab.datamesh.airbytespecificprovisioner.api.{SpecificProvisionerA
 import it.agilelab.datamesh.airbytespecificprovisioner.integrator.{AirbyteClient, AirbyteWorkloadManager}
 import it.agilelab.datamesh.airbytespecificprovisioner.server.Controller
 import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration.httpPort
+import it.agilelab.datamesh.airbytespecificprovisioner.validation.AirbyteValidator
 
 import scala.jdk.CollectionConverters._
 
@@ -62,5 +63,5 @@ object Main extends LazyLogging {
   def main(args: Array[String]): Unit = { val _ = run(httpPort, createImpl) }
 
   def createImpl(system: ActorSystem[_]): SpecificProvisionerApiService =
-    new ProvisionerApiServiceImpl(new AirbyteWorkloadManager(new AirbyteClient(system)))
+    new ProvisionerApiServiceImpl(new AirbyteWorkloadManager(new AirbyteValidator(), new AirbyteClient(system)))
 }

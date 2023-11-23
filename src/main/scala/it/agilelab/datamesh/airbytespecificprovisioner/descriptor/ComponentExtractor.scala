@@ -4,7 +4,11 @@ import cats.implicits._
 import io.circe.yaml.{parser => yamlParser}
 import io.circe.{HCursor, Json}
 import it.agilelab.datamesh.airbytespecificprovisioner.common.Constants.{ID, WORKLOAD}
-import it.agilelab.datamesh.airbytespecificprovisioner.model.ValidationError
+import it.agilelab.datamesh.airbytespecificprovisioner.error.{
+  InvalidDescriptor,
+  ParseFailureDescriptor,
+  ValidationErrorType
+}
 
 object ComponentExtractor {
 
@@ -16,7 +20,7 @@ object ComponentExtractor {
   private val OBSERVABILITY             = "observability"
   private val KIND                      = "kind"
 
-  def extract(yaml: String): Either[ValidationError, (Json, Json)] = yamlParser.parse(yaml) match {
+  def extract(yaml: String): Either[ValidationErrorType, (Json, Json)] = yamlParser.parse(yaml) match {
     case Right(json) =>
       val hcursor                   = json.hcursor
       val maybeComponentToProvision = for {
@@ -25,10 +29,10 @@ object ComponentExtractor {
         componentToProvision   <- getComponent(hcursor, componentIdToProvision)
       } yield (dpHeader, componentToProvision)
       maybeComponentToProvision match {
-        case None      => Left(ValidationError(List(s"""Input data product descriptor is invalid""")))
+        case None      => Left(InvalidDescriptor())
         case Some(ops) => Right(ops)
       }
-    case Left(_)     => Left(ValidationError(List("Input data product descriptor cannot be parsed")))
+    case Left(e)     => Left(ParseFailureDescriptor(e))
   }
 
   protected def getDpHeader(hcursor: HCursor): Option[Json] = hcursor.downField(DATA_PRODUCT_FIELD).keys

@@ -7,6 +7,7 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.Materializer
+import cats.implicits.toBifunctorOps
 import com.typesafe.scalalogging.StrictLogging
 import io.circe.{parser, Json, JsonObject}
 import it.agilelab.datamesh.airbytespecificprovisioner.common.Constants.{
@@ -15,7 +16,7 @@ import it.agilelab.datamesh.airbytespecificprovisioner.common.Constants.{
   DISCOVER_ACTION,
   LIST_ACTION
 }
-import it.agilelab.datamesh.airbytespecificprovisioner.model.{SystemError, ValidationError}
+import it.agilelab.datamesh.airbytespecificprovisioner.error.{AirbyteClientErrorType, FailureResponse, InvalidResponse}
 import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration
 
 import scala.concurrent.duration.DurationInt
@@ -23,7 +24,7 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
-class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
+class AirbyteClient(system: ActorSystem[_]) extends Client with StrictLogging {
 
   implicit val classic: actor.ActorSystem         = system.classicSystem
   implicit val executionContext: ExecutionContext = system.executionContext
@@ -54,22 +55,38 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
     }
   }
 
-  def httpResponseUnmarshaller(httpResponse: HttpResponse): Try[String] = Try {
+  private def httpResponseUnmarshaller(httpResponse: HttpResponse): Try[String] = Try {
     val unmarshalledFutureResponse = Unmarshal(httpResponse.entity).to[String]
     Await.result(unmarshalledFutureResponse, ApplicationConfiguration.airbyteConfiguration.invocationTimeout seconds)
   }
 
-  def createOrRecreate(workspaceId: String, jsonRequest: Json, resourceType: String): Either[Product, String] = {
-    delete(workspaceId, jsonRequest, resourceType)
-    submitRequest(jsonRequest, resourceType, CREATE_ACTION)
-  }
+  override def create(
+      workspaceId: String,
+      jsonRequest: Json,
+      resourceType: String
+  ): Either[AirbyteClientErrorType, String] = submitRequest(jsonRequest, resourceType, CREATE_ACTION)
 
-  def delete(workspaceId: String, jsonRequest: Json, resourceType: String): Either[Product, String] = for {
-    name <- jsonRequest.hcursor.downField("name").as[String].left.map(_ => ValidationError(Seq("name not found")))
+  override def deleteAndRecreate(
+      workspaceId: String,
+      jsonRequest: Json,
+      resourceName: String,
+      resourceType: String
+  ): Either[AirbyteClientErrorType, String] = for {
+    _   <- delete(workspaceId, resourceName, resourceType)
+    res <- submitRequest(jsonRequest, resourceType, CREATE_ACTION)
+  } yield res
+
+  override def delete(
+      workspaceId: String,
+      resourceName: String,
+      resourceType: String
+  ): Either[AirbyteClientErrorType, Unit] = for {
     listResourcesResponse          <-
       submitRequest(Json.obj(("workspaceId", Json.fromString(workspaceId))), resourceType, LIST_ACTION)
-    maybeAlreadyExistingResourceId <- getMaybeAlreadyExistingResourceId(listResourcesResponse, resourceType, name)
-    deleteResourceResponse         <- maybeAlreadyExistingResourceId match {
+    maybeAlreadyExistingResourceId <-
+      getMaybeAlreadyExistingResourceId(listResourcesResponse, resourceType, resourceName)
+        .leftMap(s => InvalidResponse(s))
+    _                              <- maybeAlreadyExistingResourceId match {
       case Some(alreadyExistingResourceId) => submitRequest(
           Json.obj((s"${resourceType}Id", Json.fromString(alreadyExistingResourceId))),
           resourceType,
@@ -77,15 +94,19 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
         )
       case None                            => Right("")
     }
-  } yield deleteResourceResponse
+  } yield ()
 
-  def discoverSchema(sourceId: String): Either[SystemError, String] = submitRequest(
+  override def discoverSchema(sourceId: String): Either[AirbyteClientErrorType, String] = submitRequest(
     Json.obj(("sourceId", Json.fromString(sourceId)), ("disable_cache", Json.fromBoolean(false))),
     "source",
     DISCOVER_ACTION
   )
 
-  def submitRequest(jsonRequest: Json, resource: String, action: String): Either[SystemError, String] = {
+  private def submitRequest(
+      jsonRequest: Json,
+      resource: String,
+      action: String
+  ): Either[AirbyteClientErrorType, String] = {
     val futureResponse = buildFutureHttpResponse(
       HttpMethods.POST,
       Uri(Seq(ApplicationConfiguration.airbyteConfiguration.baseUrl, s"${resource}s", action).mkString("/")),
@@ -101,8 +122,9 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
     tryHttpResponse match {
       case Failure(e)            =>
         logger.error(s"No response received from Airbyte while invoking ${resource}s/$action endpoint", e)
-        Left(SystemError(
-          s"No response received from Airbyte while invoking ${resource}s/$action endpoint. Please try again, if the issue persists contact the platform team"
+        Left(FailureResponse(
+          s"No response received from Airbyte while invoking ${resource}s/$action endpoint. Please try again, if the issue persists contact the platform team. Details: ${e.getMessage}",
+          e
         ))
       case Success(httpResponse) => httpResponseUnmarshaller(httpResponse) match {
           case Success(response) =>
@@ -111,15 +133,19 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
             )
             httpResponse.status.intValue() match {
               case 200 | 204 => Right(response)
-              case 400       =>
-                Left(SystemError(s"Airbyte failed to validate request for ${resource}s/$action endpoint: $response"))
-              case _         => Left(SystemError(
+              case 400       => Left(
+                  InvalidResponse(s"Airbyte failed to validate request for ${resource}s/$action endpoint: $response")
+                )
+              case _         => Left(InvalidResponse(
                   s"Request to ${resource}s/$action endpoint failed with error: ${httpResponse.status.toString}"
                 ))
             }
           case Failure(e)        =>
             logger.error("Failed to unmarshal the Airbyte response", e)
-            Left(SystemError("Failed to unmarshal the Airbyte response, contact the platform team for assistance"))
+            Left(FailureResponse(
+              s"Failed to unmarshal the Airbyte response, contact the platform team for assistance. Details: ${e.getMessage}",
+              e
+            ))
         }
     }
 
@@ -129,16 +155,15 @@ class AirbyteClient(system: ActorSystem[_]) extends StrictLogging {
       jsonResponse: String,
       resourceType: String,
       name: String
-  ): Either[SystemError, Option[String]] = parser.parse(jsonResponse) match {
+  ): Either[String, Option[String]] = parser.parse(jsonResponse) match {
     case Right(response) => response.hcursor.downField(s"${resourceType}s").as[List[JsonObject]] match {
-        case Right(l) => l.filter(jo => jo("name").contains(Json.fromString(name))) match {
-            case r :: Nil        => Right(r(s"${resourceType}Id").flatMap(_.asString))
-            case l if l.nonEmpty => Left(SystemError("Failed to parse response"))
-            case _               => Right(None)
+        case Right(l) => l.find(jo => jo("name").contains(Json.fromString(name))) match {
+            case Some(value) => Right(value(s"${resourceType}Id").flatMap(_.asString))
+            case None        => Right(None)
           }
         case Left(_)  => Right(None)
       }
-    case Left(_)         => Left(SystemError("Failed to parse response"))
+    case Left(_)         => Left("Failed to parse response")
   }
 
 }

@@ -133,6 +133,9 @@ class ProvisionerApiMarshallerImpl extends SpecificProvisionerApiMarshaller {
       ))
     }
 
+  implicit def toEntityMarshallerReverseProvisioningRequest: ToEntityMarshaller[ReverseProvisioningRequest] =
+    marshaller[ReverseProvisioningRequest]
+
   implicit def fromEntityUnmarshallerReverseProvisioningRequest: FromEntityUnmarshaller[ReverseProvisioningRequest] =
     unmarshaller[ReverseProvisioningRequest]
 

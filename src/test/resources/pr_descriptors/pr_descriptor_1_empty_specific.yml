@@ -1,0 +1,37 @@
+dataProduct:
+  dataProductOwnerDisplayName: Name Surname
+  environment: development
+  domain: finance
+  kind: dataproduct
+  id: urn:dmb:dp:finance:cashflow:0
+  description: This represents all the operating cashflows generating incoming or outgoing liquidity
+  devGroup: datameshplatform
+  ownerGroup: name.surname_agilelab.it
+  dataProductOwner: user:name.surname_agilelab.it
+  email: name.surname@agilelab.it
+  version: 0.2.0
+  fullyQualifiedName: Liquidity Cash Flows
+  name: CashFlow
+  informationSLA: null
+  maturity: Strategic
+  useCaseTemplateId: urn:dmb:utm:dataproduct-template:0.0.0
+  infrastructureTemplateId: urn:dmb:itm:cdp-aws-dataproduct-provisioner:1
+  billing: {}
+  tags: []
+  specific: {}
+  components:
+    - kind: workload
+      id: urn:dmb:cmp:finance:cashflow:0:cashflows-calculation
+      description: It calculates the cashflows starting from all the deals in input
+      useCaseTemplateId: urn:dmb:utm:dbt-standard:0.0.0
+      infrastructureTemplateId: urn:dmb:itm:dbt-provisioner:1
+      fullyQualifiedName: CashFlows Calculation
+      name: CashFlows Calculation
+      technology: dbt
+      version: 0.0.0
+      dependsOn:
+        - urn:dmb:cmp:finance:cashflow:0:snowflake-component
+      readsFrom: []
+      tags: []
+      specific: {}
+componentIdToProvision: urn:dmb:cmp:finance:cashflow:0:cashflows-calculation

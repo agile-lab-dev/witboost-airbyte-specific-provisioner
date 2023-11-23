@@ -3,12 +3,15 @@ package it.agilelab.datamesh.airbytespecificprovisioner.api.intepreter
 import akka.http.scaladsl.marshalling.ToEntityMarshaller
 import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
+import cats.data.Validated.{Invalid, Valid}
+import com.typesafe.scalalogging.LazyLogging
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport.{marshaller, unmarshaller}
 import it.agilelab.datamesh.airbytespecificprovisioner.api.SpecificProvisionerApiService
 import it.agilelab.datamesh.airbytespecificprovisioner.integrator.AirbyteWorkloadManager
 import it.agilelab.datamesh.airbytespecificprovisioner.model._
 
-class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager) extends SpecificProvisionerApiService {
+class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager)
+    extends SpecificProvisionerApiService with LazyLogging {
 
   // Json String
   implicit val toEntityMarshallerJsonString: ToEntityMarshaller[String]       = marshaller[String]
@@ -53,13 +56,16 @@ class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager) 
       toEntityMarshallerSystemError: ToEntityMarshaller[SystemError],
       toEntityMarshallerProvisioningStatus: ToEntityMarshaller[ProvisioningStatus]
   ): Route =
-    airbyteWorkloadManager.provision(provisioningRequest.descriptorKind, provisioningRequest.descriptor) match {
-      case Left(err)  => err match {
-          case e: ValidationError => provision400(ModelConverter.buildRequestValidationError(e))
-          case e: SystemError     => provision500(e)
-        }
-      case Right(res) => provision200(ProvisioningStatus(ProvisioningStatusEnums.StatusEnum.COMPLETED, res))
-      case _          => provision500(SystemError("generic error"))
+    try airbyteWorkloadManager.provision(provisioningRequest.descriptorKind, provisioningRequest.descriptor) match {
+        case Valid(_)   => provision200(ProvisioningStatus(ProvisioningStatusEnums.StatusEnum.COMPLETED, "OK"))
+        case Invalid(e) => provision400(RequestValidationError(e.toList.map(_.errorMessage)))
+      }
+    catch {
+      case t: Throwable =>
+        logger.error(s"Exception in provision", t)
+        provision500(SystemError(
+          s"An unexpected error occurred while processing the request. Please try again and if the problem persists contact the platform team. Details: ${t.getMessage}"
+        ))
     }
 
   /** Code: 200, Message: It synchronously returns the request result, DataType: String
@@ -70,7 +76,20 @@ class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager) 
       contexts: Seq[(String, String)],
       toEntityMarshallerSystemError: ToEntityMarshaller[SystemError],
       toEntityMarshallerValidationResult: ToEntityMarshaller[ValidationResult]
-  ): Route = validate200(ValidationResult(valid = true))
+  ): Route =
+    try airbyteWorkloadManager.validate(provisioningRequest.descriptorKind, provisioningRequest.descriptor) match {
+        case Valid(_)   => validate200(ValidationResult(valid = true))
+        case Invalid(e) =>
+          val errors = e.map(_.errorMessage).toList
+          validate200(ValidationResult(valid = false, error = Some(ValidationError(errors))))
+      }
+    catch {
+      case t: Throwable =>
+        logger.error(s"Exception in validate", t)
+        validate500(SystemError(
+          s"An unexpected error occurred while processing the request. Please try again and if the problem persists contact the platform team. Details: ${t.getMessage}"
+        ))
+    }
 
   /** Code: 200, Message: It synchronously returns the request result, DataType: ProvisioningStatus
    *  Code: 202, Message: If successful returns a provisioning deployment task token that can be used for polling the request status, DataType: String
@@ -83,13 +102,16 @@ class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager) 
       toEntityMarshallerSystemError: ToEntityMarshaller[SystemError],
       toEntityMarshallerProvisioningStatus: ToEntityMarshaller[ProvisioningStatus]
   ): Route =
-    airbyteWorkloadManager.unprovision(provisioningRequest.descriptorKind, provisioningRequest.descriptor) match {
-      case Left(err)  => err match {
-          case e: ValidationError => unprovision400(ModelConverter.buildRequestValidationError(e))
-          case e: SystemError     => unprovision500(e)
-        }
-      case Right(res) => unprovision200(ProvisioningStatus(ProvisioningStatusEnums.StatusEnum.COMPLETED, res))
-      case _          => unprovision500(SystemError("generic error"))
+    try airbyteWorkloadManager.unprovision(provisioningRequest.descriptorKind, provisioningRequest.descriptor) match {
+        case Valid(_)   => unprovision200(ProvisioningStatus(ProvisioningStatusEnums.StatusEnum.COMPLETED, "OK"))
+        case Invalid(e) => unprovision400(RequestValidationError(e.toList.map(_.errorMessage)))
+      }
+    catch {
+      case t: Throwable =>
+        logger.error(s"Exception in unprovision", t)
+        unprovision500(SystemError(
+          s"An unexpected error occurred while processing the request. Please try again and if the problem persists contact the platform team. Details: ${t.getMessage}"
+        ))
     }
 
   /** Code: 200, Message: It synchronously returns the access request response, DataType: ProvisioningStatus
@@ -102,7 +124,7 @@ class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager) 
       toEntityMarshallerValidationError: ToEntityMarshaller[RequestValidationError],
       toEntityMarshallerSystemError: ToEntityMarshaller[SystemError],
       toEntityMarshallerProvisioningStatus: ToEntityMarshaller[ProvisioningStatus]
-  ): Route = updateacl200(ProvisioningStatus(ProvisioningStatusEnums.StatusEnum.COMPLETED, "OK"))
+  ): Route = updateacl500(NotImplementedError)
 
   /** Code: 202, Message: It returns a token that can be used for polling the async validation operation status and results, DataType: String
    *  Code: 400, Message: Invalid input, DataType: RequestValidationError
