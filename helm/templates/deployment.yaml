@@ -5,6 +5,10 @@ metadata:
     app: {{ template "airbytespecificprovisioner.name" . }}
 {{- include "airbytespecificprovisioner.labels" . | nindent 4 }}
   name: {{ template "airbytespecificprovisioner.fullname" . }}
+  annotations:
+    {{- if .Values.annotations }}
+    {{- toYaml .Values.annotations | nindent 4 }}
+    {{- end }}
 spec:
   replicas: 1
   selector:
