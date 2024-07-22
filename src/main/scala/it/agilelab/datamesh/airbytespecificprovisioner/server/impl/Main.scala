@@ -13,8 +13,14 @@ import it.agilelab.datamesh.airbytespecificprovisioner.api.intepreter.{
   ProvisionerApiServiceImpl
 }
 import it.agilelab.datamesh.airbytespecificprovisioner.api.{SpecificProvisionerApi, SpecificProvisionerApiService}
-import it.agilelab.datamesh.airbytespecificprovisioner.integrator.{AirbyteClient, AirbyteWorkloadManager}
+import it.agilelab.datamesh.airbytespecificprovisioner.integrator.{
+  AirbyteClient,
+  AirbyteWorkloadManager,
+  AsyncAirbyteWorkloadManager
+}
 import it.agilelab.datamesh.airbytespecificprovisioner.server.Controller
+import it.agilelab.datamesh.airbytespecificprovisioner.status.{GetStatus, StatusService, TaskRepository}
+import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration
 import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration.httpPort
 import it.agilelab.datamesh.airbytespecificprovisioner.validation.AirbyteValidator
 
@@ -62,6 +68,18 @@ object Main extends LazyLogging {
 
   def main(args: Array[String]): Unit = { val _ = run(httpPort, createImpl) }
 
-  def createImpl(system: ActorSystem[_]): SpecificProvisionerApiService =
-    new ProvisionerApiServiceImpl(new AirbyteWorkloadManager(new AirbyteValidator(), new AirbyteClient(system)))
+  def createImpl(system: ActorSystem[_]): SpecificProvisionerApiService = {
+    val syncProvision = new AirbyteWorkloadManager(new AirbyteValidator(), new AirbyteClient(system))
+    if (ApplicationConfiguration.asyncConfiguration.provisionEnabled) {
+      logger.info("Initializing provisioner in async provisioning mode")
+      val repository = TaskRepository.fromConfig(ApplicationConfiguration.asyncConfiguration)
+      new ProvisionerApiServiceImpl(
+        new AsyncAirbyteWorkloadManager(syncProvision, repository, system.executionContext),
+        new StatusService(repository)
+      )
+    } else {
+      logger.info("Initializing provisioner in sync provisioning mode")
+      new ProvisionerApiServiceImpl(syncProvision, GetStatus.alwaysCompletedStatus)
+    }
+  }
 }

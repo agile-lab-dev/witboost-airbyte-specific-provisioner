@@ -1,21 +1,18 @@
 package it.agilelab.datamesh.airbytespecificprovisioner.api.intepreter
 
+import akka.http.scaladsl.marshalling.Marshaller.stringMarshaller
 import akka.http.scaladsl.marshalling.ToEntityMarshaller
+import akka.http.scaladsl.model.MediaTypes._
 import akka.http.scaladsl.server.Route
-import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import cats.data.Validated.{Invalid, Valid}
 import com.typesafe.scalalogging.LazyLogging
-import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport.{marshaller, unmarshaller}
 import it.agilelab.datamesh.airbytespecificprovisioner.api.SpecificProvisionerApiService
-import it.agilelab.datamesh.airbytespecificprovisioner.integrator.AirbyteWorkloadManager
+import it.agilelab.datamesh.airbytespecificprovisioner.integrator.WorkloadManager
 import it.agilelab.datamesh.airbytespecificprovisioner.model._
+import it.agilelab.datamesh.airbytespecificprovisioner.status.GetStatus
 
-class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager)
+class ProvisionerApiServiceImpl(airbyteWorkloadManager: WorkloadManager, checkStatus: GetStatus)
     extends SpecificProvisionerApiService with LazyLogging {
-
-  // Json String
-  implicit val toEntityMarshallerJsonString: ToEntityMarshaller[String]       = marshaller[String]
-  implicit val toEntityUnmarshallerJsonString: FromEntityUnmarshaller[String] = unmarshaller[String]
 
   private val NotImplementedError = SystemError(
     error = "Endpoint not implemented",
@@ -34,16 +31,17 @@ class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager)
       toEntityMarshallerValidationError: ToEntityMarshaller[RequestValidationError],
       toEntityMarshallerSystemError: ToEntityMarshaller[SystemError],
       toEntityMarshallerProvisioningStatus: ToEntityMarshaller[ProvisioningStatus]
-  ): Route = {
-    val error = "Asynchronous task provisioning is not yet implemented"
+  ): Route = checkStatus.statusOf(ComponentToken(token)).fold {
+    val error = s"Couldn't find operation for token '$token'"
     getStatus400(RequestValidationError(
       errors = List(error),
-      userMessage = Some(error),
-      input = Some(token),
-      inputErrorField = None,
-      moreInfo = Some(ErrorMoreInfo(problems = List(error), List.empty))
+      moreInfo = Some(ErrorMoreInfo(
+        problems = List(error),
+        solutions = List("Please try the operation again. If the problem subsists contact the platform team")
+      )),
+      userMessage = Some("It seems something went wrong while processing the task")
     ))
-  }
+  }(result => getStatus200(ProvisioningStatusMapper.from(result)))
 
   /** Code: 200, Message: It synchronously returns the request result, DataType: ProvisioningStatus
    *  Code: 202, Message: If successful returns a provisioning deployment task token that can be used for polling the request status, DataType: String
@@ -57,15 +55,17 @@ class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager)
       toEntityMarshallerProvisioningStatus: ToEntityMarshaller[ProvisioningStatus]
   ): Route =
     try airbyteWorkloadManager.provision(provisioningRequest.descriptorKind, provisioningRequest.descriptor) match {
-        case Valid(_)   => provision200(ProvisioningStatus(ProvisioningStatusEnums.StatusEnum.COMPLETED, "OK"))
-        case Invalid(e) => provision400(RequestValidationError(e.toList.map(_.errorMessage)))
+        case Valid(e)   =>
+          if (e.provisioningStatus.equals(ProvisionStatus.Running)) {
+            // Marshalling to text/plain since coordinator actually expects the token that way
+            provision202(e.componentToken.asString)(stringMarshaller(`text/plain`))
+          } else provision200(ProvisioningStatusMapper.from(e))
+        case Invalid(e) => provision400(ModelConverter.buildRequestValidationError(e))
       }
     catch {
       case t: Throwable =>
         logger.error(s"Exception in provision", t)
-        provision500(SystemError(
-          s"An unexpected error occurred while processing the request. Please try again and if the problem persists contact the platform team. Details: ${t.getMessage}"
-        ))
+        provision500(ModelConverter.buildSystemError(t))
     }
 
   /** Code: 200, Message: It synchronously returns the request result, DataType: String
@@ -86,9 +86,7 @@ class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager)
     catch {
       case t: Throwable =>
         logger.error(s"Exception in validate", t)
-        validate500(SystemError(
-          s"An unexpected error occurred while processing the request. Please try again and if the problem persists contact the platform team. Details: ${t.getMessage}"
-        ))
+        validate500(ModelConverter.buildSystemError(t))
     }
 
   /** Code: 200, Message: It synchronously returns the request result, DataType: ProvisioningStatus
@@ -103,15 +101,17 @@ class ProvisionerApiServiceImpl(airbyteWorkloadManager: AirbyteWorkloadManager)
       toEntityMarshallerProvisioningStatus: ToEntityMarshaller[ProvisioningStatus]
   ): Route =
     try airbyteWorkloadManager.unprovision(provisioningRequest.descriptorKind, provisioningRequest.descriptor) match {
-        case Valid(_)   => unprovision200(ProvisioningStatus(ProvisioningStatusEnums.StatusEnum.COMPLETED, "OK"))
-        case Invalid(e) => unprovision400(RequestValidationError(e.toList.map(_.errorMessage)))
+        case Valid(e)   =>
+          if (e.provisioningStatus.equals(ProvisionStatus.Running))
+            // Marshalling to text/plain since coordinator actually expects the token that way
+            provision202(e.componentToken.asString)(stringMarshaller(`text/plain`))
+          else provision200(ProvisioningStatusMapper.from(e))
+        case Invalid(e) => unprovision400(ModelConverter.buildRequestValidationError(e))
       }
     catch {
       case t: Throwable =>
         logger.error(s"Exception in unprovision", t)
-        unprovision500(SystemError(
-          s"An unexpected error occurred while processing the request. Please try again and if the problem persists contact the platform team. Details: ${t.getMessage}"
-        ))
+        unprovision500(ModelConverter.buildSystemError(t))
     }
 
   /** Code: 200, Message: It synchronously returns the access request response, DataType: ProvisioningStatus

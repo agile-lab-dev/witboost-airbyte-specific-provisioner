@@ -117,17 +117,27 @@ Most application configurations are handled with the Typesafe Config library. Yo
 
 Airbyte information can be passed in via environment variables or configuration file; the mapping done by default resides in the `reference.conf` and is the following:
 
-| Setting          | Environment Variable        |
-|:-----------------|:----------------------------|
-| base-url         | AIRBYTE_BASE_URL            |
-| workspace-id     | AIRBYTE_WORKSPACE_ID        |
-| source-id        | AIRBYTE_SOURCE_ID           |
-| destination-id   | AIRBYTE_DESTINATION_ID      |
-| git-token        | DBT_GIT_TOKEN               |
-| dbt-user         | DBT_GIT_USER                |
-| airbyte-user     | AIRBYTE_USERNAME            |
-| airbyte-password | AIRBYTE_PASSWORD            |
-| basic-auth       | AIRBYTE_BASIC_AUTH_ENABLED  |
+| Setting          | Defaults to Environment Variable |
+|:-----------------|:---------------------------------|
+| base-url         | AIRBYTE_BASE_URL                 |
+| workspace-id     | AIRBYTE_WORKSPACE_ID             |
+| source-id        | AIRBYTE_SOURCE_ID                |
+| destination-id   | AIRBYTE_DESTINATION_ID           |
+| git-token        | DBT_GIT_TOKEN                    |
+| dbt-user         | DBT_GIT_USER                     |
+| airbyte-user     | AIRBYTE_USERNAME                 |
+| airbyte-password | AIRBYTE_PASSWORD                 |
+| basic-auth       | AIRBYTE_BASIC_AUTH_ENABLED       |
+
+
+### Async configuration
+
+Enable async handling on the Airbyte Specific Provisioner
+
+| Configuration                                 | Description                                                                                                                | Default |
+|:----------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------|:--------|
+| `dataMeshProvisioner.async.provision.enabled` | Enables the async provision/unprovision tasks. When enabled, operations will return 202 with a token to be used on polling | `false` |
+| `dataMeshProvisioner.async.type`              | Defines the type of repository to be used to store the status of the asynchronous tasks. Allowed values: [`cache`]         | `cache` |
 
 Logging is handled with Logback, you can find an example `logback.xml` in the Helm chart. Customize it and pass it using the `logback.configurationFile` system property.
 

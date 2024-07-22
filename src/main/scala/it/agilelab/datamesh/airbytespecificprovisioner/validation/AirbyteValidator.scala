@@ -37,7 +37,11 @@ class AirbyteValidator extends Validator with LazyLogging {
         validateSource(cDescriptor),
         validateDestination(cDescriptor),
         validateConnection(cDescriptor)
-      ).mapN((dpFields, aSource, aDest, aConn) => AirbyteFields(dpFields, aSource, aDest, aConn))
+      ).mapN { (dpFields, aSource, aDest, aConn) =>
+        val output = AirbyteFields(dpFields, aSource, aDest, aConn)
+        logger.info(s"Validation successful with output: $output")
+        output
+      }
     ))
 
   private def validateComponentDescriptor(descriptor: String): ValidatedNel[ValidationErrorType, ComponentDescriptor] =

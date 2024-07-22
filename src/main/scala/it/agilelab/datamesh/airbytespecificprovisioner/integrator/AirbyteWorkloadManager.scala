@@ -12,50 +12,83 @@ import it.agilelab.datamesh.airbytespecificprovisioner.error.{
   GetIdFromCreationErrorType,
   ValidationErrorType
 }
-import it.agilelab.datamesh.airbytespecificprovisioner.model.{AirbyteFields, DescriptorKind}
+import it.agilelab.datamesh.airbytespecificprovisioner.model.{AirbyteFields, DescriptorKind, ProvisionResult}
 import it.agilelab.datamesh.airbytespecificprovisioner.system.ApplicationConfiguration
 import it.agilelab.datamesh.airbytespecificprovisioner.validation.Validator
 
-class AirbyteWorkloadManager(validator: Validator, airbyteClient: Client) extends StrictLogging {
+class AirbyteWorkloadManager(validator: Validator, airbyteClient: Client) extends StrictLogging with WorkloadManager {
 
   private val workspaceId: String = ApplicationConfiguration.airbyteConfiguration.workspaceId
 
-  def validate(descriptorKind: DescriptorKind, descriptor: String): ValidatedNel[ValidationErrorType, AirbyteFields] =
-    validator.validate(descriptorKind, descriptor)
+  override def validate(
+      descriptorKind: DescriptorKind,
+      descriptor: String
+  ): ValidatedNel[ValidationErrorType, AirbyteFields] = {
+    logger.info("Validating descriptor")
+    val output = validator.validate(descriptorKind, descriptor)
+    output.leftMap { err =>
+      logger.error("Errors were found while validating: {}", err.toList.mkString(","))
+      err
+    }
+  }
 
-  def provision(descriptorKind: DescriptorKind, descriptor: String): ValidatedNel[ErrorType, String] = validator
-    .validate(descriptorKind, descriptor).andThen(airbyteFields =>
-      provisionSource(airbyteFields).andThen(sourceResponse =>
-        provisionDestination(airbyteFields).andThen(destinationResponse =>
-          provisionOperation().andThen(operationResponse =>
-            getIdFromCreationResponse(sourceResponse, "sourceId").andThen(provisionedSourceId =>
-              getIdFromCreationResponse(destinationResponse, "destinationId").andThen(provisionedDestinationId =>
-                getIdFromCreationResponse(operationResponse, "operationId").andThen(provisionedOperationId =>
-                  airbyteClient.discoverSchema(provisionedSourceId).toValidatedNel.andThen(discoveredSchemaResponse =>
-                    getConnectionInfo(discoveredSchemaResponse).andThen(connectionInfo =>
+  override def provision(descriptorKind: DescriptorKind, descriptor: String): ValidatedNel[ErrorType, ProvisionResult] =
+    validator.validate(descriptorKind, descriptor).andThen { airbyteFields =>
+      logger.info("Validation successful")
+      logger.info(s"Provisioning source ${airbyteFields.source.name}")
+      provisionSource(airbyteFields).andThen { sourceResponse =>
+        logger.info(s"Provisioning of source ${airbyteFields.source.name} successful")
+        logger.info(s"Provisioning destination ${airbyteFields.destination.name}")
+        provisionDestination(airbyteFields).andThen { destinationResponse =>
+          logger.info(s"Provisioning of destination ${airbyteFields.destination.name} successful")
+          logger.info(s"Provisioning normalization operation")
+          provisionOperation().andThen { operationResponse =>
+            logger.info(s"Provisioning of normalization operation successful")
+            getIdFromCreationResponse(sourceResponse, "sourceId").andThen { provisionedSourceId =>
+              getIdFromCreationResponse(destinationResponse, "destinationId").andThen { provisionedDestinationId =>
+                getIdFromCreationResponse(operationResponse, "operationId").andThen { provisionedOperationId =>
+                  airbyteClient.discoverSchema(provisionedSourceId).toValidatedNel.andThen { discoveredSchemaResponse =>
+                    getConnectionInfo(discoveredSchemaResponse).andThen { connectionInfo =>
+                      logger.info(
+                        s"Provisioning connection ${airbyteFields.connection.name} with source '$provisionedSourceId' and destination '$provisionedDestinationId"
+                      )
                       provisionConnection(
                         airbyteFields.connection.name,
                         connectionInfo,
                         provisionedSourceId,
                         provisionedDestinationId,
                         List(provisionedOperationId)
-                      )
-                    )
-                  )
-                )
-              )
-            )
-          )
-        )
-      )
-    )
+                      ).map { result =>
+                        logger.info(s"Provision of connection ${airbyteFields.connection.name} successful")
+                        ProvisionResult.completed(result)
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
 
-  def unprovision(descriptorKind: DescriptorKind, descriptor: String): ValidatedNel[ErrorType, Unit] = validator
-    .validate(descriptorKind, descriptor).andThen(airbyteFields =>
-      unprovisionResource(airbyteFields, CONNECTION).andThen(_ =>
-        (unprovisionResource(airbyteFields, DESTINATION), unprovisionResource(airbyteFields, SOURCE)).mapN((_, _) => ())
-      )
-    )
+  override def unprovision(
+      descriptorKind: DescriptorKind,
+      descriptor: String
+  ): ValidatedNel[ErrorType, ProvisionResult] = validator.validate(descriptorKind, descriptor)
+    .andThen { airbyteFields =>
+      logger.info("Validation successful")
+      logger.info(s"Unprovisioning connection ${airbyteFields.connection.name}")
+      unprovisionResource(airbyteFields, CONNECTION).andThen { _ =>
+        logger.info(s"Unprovisioning of connection ${airbyteFields.connection.name} successful")
+        logger
+          .info(s"Unprovisioning source ${airbyteFields.source.name} and destination ${airbyteFields.destination.name}")
+        (unprovisionResource(airbyteFields, DESTINATION), unprovisionResource(airbyteFields, SOURCE)).mapN { (_, _) =>
+          logger.info("Unprovision successful")
+          ProvisionResult.completed()
+        }
+      }
+    }
 
   private def provisionSource(airbyteFields: AirbyteFields) = {
     val finalSource = airbyteFields.source.raw.deepMerge(Json.obj(

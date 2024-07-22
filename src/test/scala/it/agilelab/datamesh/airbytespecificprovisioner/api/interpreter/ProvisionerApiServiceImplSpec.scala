@@ -2,9 +2,10 @@ package it.agilelab.datamesh.airbytespecificprovisioner.api.interpreter
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.{HttpEntity, HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.{Directive1, RequestContext, Route}
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
+import akka.http.scaladsl.unmarshalling.Unmarshaller
 import akka.testkit.TestDuration
 import cats.data.Validated
 import cats.data.Validated.Valid
@@ -17,9 +18,10 @@ import it.agilelab.datamesh.airbytespecificprovisioner.api.intepreter.{
 }
 import it.agilelab.datamesh.airbytespecificprovisioner.common.test.getTestResourceAsString
 import it.agilelab.datamesh.airbytespecificprovisioner.error.{InvalidDescriptor, InvalidResponse}
-import it.agilelab.datamesh.airbytespecificprovisioner.integrator.AirbyteWorkloadManager
+import it.agilelab.datamesh.airbytespecificprovisioner.integrator.WorkloadManager
 import it.agilelab.datamesh.airbytespecificprovisioner.model._
 import it.agilelab.datamesh.airbytespecificprovisioner.server.Controller
+import it.agilelab.datamesh.airbytespecificprovisioner.status.GetStatus
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -44,10 +46,12 @@ class ProvisionerApiServiceImplSpec
 
   val marshaller = new ProvisionerApiMarshallerImpl
 
-  private val airbyteManager = mock[AirbyteWorkloadManager]
+  private val airbyteManager = mock[WorkloadManager]
+
+  private val getStatus = mock[GetStatus]
 
   val api = new SpecificProvisionerApi(
-    new ProvisionerApiServiceImpl(airbyteManager),
+    new ProvisionerApiServiceImpl(airbyteManager, getStatus),
     new ProvisionerApiMarshallerImpl,
     new ExtractContexts {
 
@@ -106,11 +110,26 @@ class ProvisionerApiServiceImplSpec
     val yaml    = getTestResourceAsString("pr_descriptors/pr_descriptor_1.yml")
     val request = ProvisioningRequest(COMPONENT_DESCRIPTOR, descriptor = yaml, removeData = false)
 
-    val _ = (airbyteManager.provision _).expects(*, *).returns(Valid(""))
+    val _ = (airbyteManager.provision _).expects(*, *).returns(Valid(ProvisionResult.completed()))
 
     Post("/v1/provision", request) ~> api.route ~> check {
       val response = responseAs[ProvisioningStatus]
       response.status shouldEqual ProvisioningStatusEnums.StatusEnum.COMPLETED
+    }
+  }
+
+  it should "asynchronously provision when a valid descriptor is passed as input" in {
+    val yaml    = getTestResourceAsString("pr_descriptors/pr_descriptor_1.yml")
+    val request = ProvisioningRequest(COMPONENT_DESCRIPTOR, descriptor = yaml, removeData = false)
+    val token   = ComponentToken("token-123")
+    val _       = (airbyteManager.provision _).expects(*, *).returns(Valid(ProvisionResult.running(token)))
+
+    Post("/v1/provision", request) ~> api.route ~> check {
+      implicit val responseBodyUnmarshaller: Unmarshaller[HttpResponse, String] = Unmarshaller
+        .strict[HttpResponse, HttpEntity](_.entity).andThen(Unmarshaller.stringUnmarshaller)
+      response.status shouldEqual StatusCodes.Accepted
+      val receivedToken                                                         = responseAs[String]
+      receivedToken shouldEqual token.asString
     }
   }
 
@@ -144,11 +163,26 @@ class ProvisionerApiServiceImplSpec
     val yaml    = getTestResourceAsString("pr_descriptors/pr_descriptor_1.yml")
     val request = ProvisioningRequest(COMPONENT_DESCRIPTOR, descriptor = yaml, removeData = false)
 
-    val _ = (airbyteManager.unprovision _).expects(*, *).returns(Valid(()))
+    val _ = (airbyteManager.unprovision _).expects(*, *).returns(Valid(ProvisionResult.completed()))
 
     Post("/v1/unprovision", request) ~> api.route ~> check {
       val response = responseAs[ProvisioningStatus]
       response.status shouldEqual ProvisioningStatusEnums.StatusEnum.COMPLETED
+    }
+  }
+
+  it should "asynchronously unprovision when a valid descriptor is passed as input" in {
+    val yaml    = getTestResourceAsString("pr_descriptors/pr_descriptor_1.yml")
+    val request = ProvisioningRequest(COMPONENT_DESCRIPTOR, descriptor = yaml, removeData = false)
+    val token   = ComponentToken("token-123")
+    val _       = (airbyteManager.unprovision _).expects(*, *).returns(Valid(ProvisionResult.running(token)))
+
+    Post("/v1/unprovision", request) ~> api.route ~> check {
+      implicit val responseBodyUnmarshaller: Unmarshaller[HttpResponse, String] = Unmarshaller
+        .strict[HttpResponse, HttpEntity](_.entity).andThen(Unmarshaller.stringUnmarshaller)
+      response.status shouldEqual StatusCodes.Accepted
+      val receivedToken                                                         = responseAs[String]
+      receivedToken shouldEqual token.asString
     }
   }
 
@@ -184,8 +218,21 @@ class ProvisionerApiServiceImplSpec
     Post("/v1/updateacl", request) ~> api.route ~> check(response.status shouldEqual StatusCodes.InternalServerError)
   }
 
-  it should "raise an error for an async getStatus request" in Get("/v1/provision/token/status") ~> api.route ~> check {
-    response.status shouldEqual StatusCodes.BadRequest
+  it should "return a provision result for an existing async getStatus request" in {
+    val _ = (getStatus.statusOf _).expects(ComponentToken("token-123")).returns(Some(ProvisionResult.completed()))
+    Get("/v1/provision/token-123/status") ~> api.route ~> check {
+      val response = responseAs[ProvisioningStatus]
+      response.status shouldEqual ProvisioningStatusEnums.StatusEnum.COMPLETED
+    }
+  }
+
+  it should "return an error if an operation with received token doesn't exist" in {
+    val _ = (getStatus.statusOf _).expects(ComponentToken("token-123")).returns(None)
+    Get("/v1/provision/token-123/status") ~> api.route ~> check {
+      response.status shouldEqual StatusCodes.BadRequest
+      val content = responseAs[RequestValidationError]
+      content.errors should contain("Couldn't find operation for token 'token-123'")
+    }
   }
 
   it should "raise an error for an async validate request" in {

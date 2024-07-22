@@ -9,3 +9,7 @@ case class GetIdFromCreationErrorType(error: String) extends ProvisionErrorType 
 case class GetConnectionInfoErrorType(error: String) extends ProvisionErrorType {
   override def errorMessage: String = error
 }
+
+case class AsyncProvisionFailure(message: String, error: Throwable) extends ProvisionErrorType {
+  override def errorMessage: String = message
+}

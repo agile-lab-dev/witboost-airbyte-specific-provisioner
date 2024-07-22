@@ -1,11 +1,13 @@
 package it.agilelab.datamesh.airbytespecificprovisioner.system
 
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
+import com.typesafe.scalalogging.LazyLogging
 
 import java.util.concurrent.atomic.AtomicReference
 import scala.annotation.tailrec
+import scala.util.Try
 
-object ApplicationConfiguration {
+object ApplicationConfiguration extends LazyLogging {
 
   val config: AtomicReference[Config] = new AtomicReference(ConfigFactory.load())
 
@@ -61,4 +63,13 @@ object ApplicationConfiguration {
     basicAuth = config.get.getString("airbyte.basic-auth")
   )
 
+  case class AsyncConfiguration(repositoryType: String, provisionEnabled: Boolean)
+
+  lazy val asyncConfiguration: AsyncConfiguration = AsyncConfiguration(
+    repositoryType = config.get.getString("async.type"),
+    provisionEnabled = Try(config.get.getBoolean("async.provision.enabled")).getOrElse {
+      logger.warn(s"Couldn't find configuration for async.provision.enabled, fall-backing to Synchronous provisioning")
+      false
+    }
+  )
 }

@@ -94,7 +94,7 @@ paths:
         202:
           description: If successful returns a provisioning deployment task token that can be used for polling the request status
           content:
-            application/json:
+            text/plain:
               schema:
                 type: string
         400:
@@ -190,7 +190,7 @@ paths:
         202:
           description: If successful returns a provisioning deployment task token that can be used for polling the request status
           content:
-            application/json:
+            text/plain:
               schema:
                 type: string
         400:
@@ -228,7 +228,7 @@ paths:
         202:
           description: If successful returns a provisioning deployment task token that can be used for polling the request status
           content:
-            application/json:
+            text/plain:
               schema:
                 type: string
         400:
@@ -265,7 +265,7 @@ paths:
         202:
           description: It returns a reverse provisioning task token that can be used for polling the request status
           content:
-            application/json:
+            text/plain:
               schema:
                 type: string
         400:
